@@ -86,6 +86,26 @@ describe("parseConfigText", () => {
     });
   });
 
+  it('treats type: "http" URL configs as Streamable HTTP', () => {
+    const parsed = parseConfigText(
+      JSON.stringify({
+        mcpServers: {
+          last9: {
+            type: "http",
+            url: "https://app.last9.io/mcp"
+          }
+        }
+      }),
+      "/tmp/config.json"
+    );
+
+    expect(parsed.servers[0]).toMatchObject({
+      name: "last9",
+      url: "https://app.last9.io/mcp",
+      transport: "streamable-http"
+    });
+  });
+
   it("produces warnings for malformed config instead of crashing", () => {
     const parsed = parseConfigText("{", "/tmp/bad.json");
     expect(parsed.servers).toEqual([]);

@@ -118,9 +118,11 @@ async function run(rawOptions: unknown): Promise<number> {
     {
       configFiles: discovered.paths.length,
       staticOnly: options.noExec,
-      warnings: [...discovered.warnings, ...parseWarnings, ...tokenWarnings]
+      warnings: [...discovered.warnings, ...parseWarnings]
     }
   );
+  // Token warnings are emitted during analyzeServers while payloads are counted.
+  // Append them after analysis so JSON/human reports include opt-in API fallback notices.
   report.warnings.push(...tokenWarnings);
 
   if (options.json) {

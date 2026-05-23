@@ -41,10 +41,6 @@ function inferTransport(config: Record<string, unknown>): TransportKind {
   }
 
   if (typeof config.url === "string") {
-    if (explicit.includes("http") && !explicit.includes("streamable")) {
-      return "http";
-    }
-
     return "streamable-http";
   }
 
