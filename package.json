@@ -1,5 +1,5 @@
 {
-  "name": "tare",
+  "name": "tare-mcp",
   "version": "0.1.0",
   "description": "Local-first CLI for analyzing MCP context weight and tool ambiguity.",
   "license": "MIT",

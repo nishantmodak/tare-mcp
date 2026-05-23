@@ -3,7 +3,7 @@
 See what your MCP tools weigh before your agent does anything.
 
 ```bash
-npx tare
+npx tare-mcp
 ```
 
 MCP made tools easy to connect.
@@ -51,7 +51,7 @@ If three servers all expose tools that look like "search", the model has to choo
 After the package is published:
 
 ```bash
-npx tare
+npx tare-mcp
 ```
 
 For local development from this repository:
@@ -62,29 +62,30 @@ pnpm build
 pnpm dev
 ```
 
-Run against your local MCP configuration:
+Run against your local MCP configuration after installing it into a project:
 
 ```bash
+npm install --save-dev tare-mcp
 npx tare
 ```
 
 Static-only mode parses config without starting servers or calling hosted endpoints:
 
 ```bash
-npx tare --no-exec
+npx tare-mcp --no-exec
 ```
 
 Set a budget:
 
 ```bash
-npx tare --budget 40000
-npx tare --budget 40000 --tokenizer openai
+npx tare-mcp --budget 40000
+npx tare-mcp --budget 40000 --tokenizer openai
 ```
 
 Emit JSON for CI or other tools:
 
 ```bash
-npx tare --json
+npx tare-mcp --json
 ```
 
 ## Quick live example
@@ -196,13 +197,13 @@ If a server cannot be inspected because credentials are missing, the endpoint is
 Live inspection is the default because it asks MCP servers for the tool definitions they actually expose through `tools/list`.
 
 ```bash
-npx tare
+npx tare-mcp
 ```
 
 Static-only mode does not spawn stdio MCP servers and does not call hosted MCP URLs:
 
 ```bash
-npx tare --no-exec
+npx tare-mcp --no-exec
 ```
 
 Static-only mode is insufficient for packaged or hosted MCP servers because config files usually contain only commands, args, URLs, and headers. They do not contain the tool schemas the model receives.
@@ -218,7 +219,7 @@ Token counts are still model-dependent. `tare` shows both Claude and OpenAI cl10
 By default, Claude token counts are local approximations. API-backed Claude token counting is optional and must be explicitly enabled:
 
 ```bash
-npx tare --claude-tokenizer api
+npx tare-mcp --claude-tokenizer api
 ```
 
 That mode requires `ANTHROPIC_API_KEY` and uses Anthropic's `POST /v1/messages/count_tokens` endpoint. `TARE_DISABLE_ANTHROPIC_TOKEN_API=1` disables API-backed counting even when requested.
@@ -277,7 +278,7 @@ See [`examples/stdio.mcp.json`](examples/stdio.mcp.json) and [`examples/streamab
 ## JSON usage
 
 ```bash
-npx tare --json > tare-report.json
+npx tare-mcp --json > tare-report.json
 ```
 
 The JSON report includes:
@@ -310,13 +311,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npx tare --budget 40000
+      - run: npx tare-mcp --budget 40000
 ```
 
 For CI systems that should not execute local MCP server commands, use static-only mode and treat the result as insufficient:
 
 ```bash
-npx tare --no-exec --json
+npx tare-mcp --no-exec --json
 ```
 
 ## Publishing to npm
@@ -339,35 +340,26 @@ pnpm build
 npm publish --access public --provenance
 ```
 
-If you control the unscoped npm package name `tare`, users can install it with:
+The npm package is named `tare-mcp` because the unscoped `tare` package name is already occupied on npm.
+
+Users can install it with:
 
 ```bash
-npm install --save-dev tare
+npm install --save-dev tare-mcp
 npx tare
 ```
 
-If you do not control the unscoped npm name, publish under a scope instead:
-
-```json
-{
-  "name": "@nishantmodak/tare",
-  "bin": {
-    "tare": "./dist/cli.js"
-  }
-}
-```
-
-Then users can run:
+For one-off usage:
 
 ```bash
-npm install --save-dev @nishantmodak/tare
-npx tare
+npx tare-mcp
 ```
 
-or one-off:
+The installed binary is still named `tare`, so global installs work as `tare`:
 
 ```bash
-npx @nishantmodak/tare
+npm install --global tare-mcp
+tare
 ```
 
 ## CLI
