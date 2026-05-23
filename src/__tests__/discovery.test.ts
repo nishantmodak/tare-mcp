@@ -13,11 +13,26 @@ describe("config discovery", () => {
       "/repo/mcp.json",
       "/repo/.cursor/mcp.json",
       "/repo/.vscode/mcp.json",
+      "/home/alice/.claude/mcp.json",
       "/home/alice/Library/Application Support/Claude/claude_desktop_config.json",
       "/home/alice/.config/Claude/claude_desktop_config.json",
       "/home/alice/.config/claude/claude_desktop_config.json",
       "/home/alice/.config/tare/mcp.json"
     ]);
+  });
+
+  it("discovers ~/.claude/mcp.json (Claude Code default location)", async () => {
+    const home = await tempDir();
+    try {
+      const claudeDir = path.join(home.path, ".claude");
+      await mkdir(claudeDir, { recursive: true });
+      await writeFile(path.join(claudeDir, "mcp.json"), "{}");
+
+      const result = await discoverConfigs(home.path, home.path);
+      expect(result.paths).toContain(path.join(home.path, ".claude", "mcp.json"));
+    } finally {
+      await home.cleanup();
+    }
   });
 
   it("discovers local and home config files", async () => {

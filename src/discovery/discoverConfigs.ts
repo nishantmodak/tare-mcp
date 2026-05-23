@@ -6,6 +6,7 @@ import { expandHome, pathExists } from "../utils/fs.js";
 const LOCAL_CONFIG_PATTERNS = [".mcp.json", "mcp.json", ".cursor/mcp.json", ".vscode/mcp.json"];
 
 const HOME_CONFIG_PATTERNS = [
+  "~/.claude/mcp.json",
   "~/Library/Application Support/Claude/claude_desktop_config.json",
   "~/.config/Claude/claude_desktop_config.json",
   "~/.config/claude/claude_desktop_config.json",

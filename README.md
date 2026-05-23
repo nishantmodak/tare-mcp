@@ -74,6 +74,28 @@ After the package is published:
 npx tare-mcp
 ```
 
+On the first run you should see something like:
+
+```txt
+tare-mcp — MCP context weight
+
+Config files found: 1
+Servers analyzed: 2
+Inspection mode: live default
+Tools exposed: 47
+
+Estimated context weight:
+- Claude estimate:        ~18,400 tokens
+- OpenAI cl100k estimate: ~17,800 tokens
+
+Context window usage:
+- 200k window:  9%
+- 128k window: 14%
+- 64k window:  29%
+```
+
+If the output is empty or shows "Config files found: 0", see [Config discovery](#config-discovery).
+
 Install it in a project:
 
 ```bash
@@ -127,13 +149,15 @@ export LAST9_MCP_TOKEN="..."
 npx tare-mcp --timeout 10000
 ```
 
-The hosted example config points at:
+The hosted example config points at Last9's observability MCP endpoint:
 
 ```txt
 https://mcp.last9.io/mcp
 ```
 
-If the token is missing or invalid, `tare-mcp` reports a `401 Unauthorized` fallback instead of crashing. To use a different hosted MCP server, edit the `url` and `headers` in `.mcp.json`.
+To use a different hosted MCP server, edit the `url` and `headers` in `.mcp.json`. Any Streamable HTTP MCP server works here.
+
+If the token is missing or invalid, `tare-mcp` reports a `401 Unauthorized` fallback instead of crashing.
 
 Expected shape with valid credentials:
 
@@ -295,7 +319,16 @@ By default, Claude token counts are local approximations. API-backed Claude toke
 npx tare-mcp --claude-tokenizer api
 ```
 
-That mode requires `ANTHROPIC_API_KEY` and uses Anthropic's `POST /v1/messages/count_tokens` endpoint. `TARE_DISABLE_ANTHROPIC_TOKEN_API=1` disables API-backed counting even when requested.
+That mode requires `ANTHROPIC_API_KEY` and uses Anthropic's `POST /v1/messages/count_tokens` endpoint.
+
+Environment variables that control tokenization:
+
+| Variable | Values | Default | Description |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | string | — | Required for `--claude-tokenizer api` |
+| `TARE_CLAUDE_TOKENIZER` | `local`, `api` | `local` | Override `--claude-tokenizer` via env |
+| `TARE_ANTHROPIC_MODEL` | model ID | `claude-sonnet-4-6` | Model used for API-backed token counting |
+| `TARE_DISABLE_ANTHROPIC_TOKEN_API` | `1` | unset | Disable API-backed counting even when requested |
 
 ## Security model
 
@@ -458,11 +491,14 @@ Options:
 
 ## Roadmap
 
+v0.2 targets:
+- [ ] Per-tool schema breakdown
+- [ ] Context budget config file (`tare.config.json`)
+
+Later:
 - [ ] Better SSE fallback
 - [ ] Improved Claude local token estimator
 - [ ] Opt-in API-backed token counting improvements
-- [ ] Per-tool schema breakdown
-- [ ] Context budget config file
 - [ ] GitHub Actions integration
 - [ ] HTML reports
 - [ ] Compare mode
