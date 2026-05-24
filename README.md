@@ -4,16 +4,30 @@
 [![npm](https://img.shields.io/npm/v/tare-mcp?label=npm)](https://www.npmjs.com/package/tare-mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-See what your MCP tools weigh before your agent does anything.
+Measure the MCP tool surface your agent is about to send to a model.
 
 ```bash
-npx tare-mcp
+npm install tare-mcp
 ```
 
-MCP made tools easy to connect.
-It did not make them cheap to carry.
+```ts
+import { measureTools } from "tare-mcp";
 
-`tare-mcp` inspects your MCP setup and shows, in one local run:
+const tools = await mcpClient.listTools();
+const report = await measureTools(tools, { budget: 40_000 });
+
+console.log(
+  `MCP tool surface: ${report.summary.tools} tools, ~${report.summary.estimatedTokens.claude} Claude tokens`
+);
+
+if (report.metadata.budgetExceeded) {
+  throw new Error("MCP tool surface exceeds budget");
+}
+```
+
+MCP made tools easy to connect. It did not make them cheap to carry.
+
+`tare-mcp` shows, from inside your agent or from the CLI:
 
 - how many tools your agent sees
 - how much context those tools consume, estimated for Claude and OpenAI cl100k
@@ -21,27 +35,10 @@ It did not make them cheap to carry.
 - which tools overlap and compete for model attention
 - whether your setup exceeds a context budget
 
-Use it once to see the current cost:
+Use the CLI when you want to inspect config-discovered MCP servers locally:
 
 ```bash
 npx tare-mcp
-```
-
-Use it in CI to catch MCP bloat before merge:
-
-```bash
-# one time
-mkdir -p .tare
-npx tare-mcp --json > .tare/baseline.json
-git add .tare/baseline.json
-
-# on every PR
-npx tare-mcp --json > tare-report.json
-npx tare-mcp diff \
-  --base .tare/baseline.json \
-  --head tare-report.json \
-  --max-token-increase 5000 \
-  --max-tool-increase 20
 ```
 
 Think of it as `du -sh node_modules`, but for agent tool context.
@@ -50,14 +47,14 @@ Think of it as `du -sh node_modules`, but for agent tool context.
 
 - [Why This Matters](#why-this-matters)
 - [Why Token Count Is Not the Whole Problem](#why-token-count-is-not-the-whole-problem)
-- [Quickstart](#quickstart)
+- [Using tare-mcp in your agent](#using-tare-mcp-in-your-agent)
+- [CLI Quickstart](#cli-quickstart)
 - [Hosted MCP Quickstart](#hosted-mcp-quickstart)
 - [Scenario Examples](#scenario-examples)
 - [Example Output](#example-output)
 - [Supported Transports](#supported-transports)
 - [Static vs Live Inspection](#static-vs-live-inspection)
 - [Accuracy](#accuracy)
-- [Using tare-mcp in your agent](#using-tare-mcp-in-your-agent)
 - [Security Model](#security-model)
 - [Config Discovery](#config-discovery)
 - [JSON Usage](#json-usage)
@@ -89,7 +86,80 @@ If three servers all expose tools that look like "search", the model has to choo
 - what your tools weigh
 - where your tools overlap
 
-## Quickstart
+## Using tare-mcp in your agent
+
+Production agents often do not have a stable `.mcp.json` file to inspect. They connect to MCP servers, call `tools/list`, and pass those tool definitions to the model on each request.
+
+Use `measureTools()` when you already have the tool definitions in memory:
+
+```ts
+import { measureTools } from "tare-mcp";
+
+const tools = await mcpClient.listTools();
+const report = await measureTools(tools);
+
+console.log(
+  `MCP tool surface: ${report.summary.tools} tools, ~${report.summary.estimatedTokens.claude} Claude tokens`
+);
+```
+
+For multiple MCP servers, add `server` per tool so overlap warnings and per-server totals remain useful:
+
+```ts
+import { measureTools } from "tare-mcp";
+
+const last9Tools = await last9Client.listTools();
+const githubTools = await githubClient.listTools();
+
+const report = await measureTools([
+  ...last9Tools.map((tool) => ({ ...tool, server: "last9" })),
+  ...githubTools.map((tool) => ({ ...tool, server: "github" }))
+]);
+```
+
+For unattributed tools, pass a fallback server name:
+
+```ts
+const report = await measureTools(tools, {
+  serverName: "agent"
+});
+```
+
+Budget checks are metadata, not exceptions. That keeps the library easy to use in request paths, logs, and CI:
+
+```ts
+const report = await measureTools(tools, { budget: 40_000 });
+
+if (report.metadata.budgetExceeded) {
+  throw new Error(
+    `MCP tool surface exceeds budget: ~${report.summary.estimatedTokens.claude} Claude tokens`
+  );
+}
+```
+
+Structured logging example:
+
+```ts
+logger.info("mcp.tool_surface", {
+  tools: report.summary.tools,
+  servers: report.summary.servers,
+  tokens_claude: report.summary.estimatedTokens.claude,
+  tokens_openai_cl100k: report.summary.estimatedTokens.openaiCl100k,
+  overlap_clusters: report.overlapClusters.length,
+  budget_exceeded: report.metadata.budgetExceeded ?? false
+});
+```
+
+The programmatic API is local-first. It does not read config files, spawn MCP servers, or call cloud tokenization APIs by default. API-backed Claude token counting is opt-in:
+
+```ts
+const report = await measureTools(tools, {
+  claudeTokenizerMode: "api",
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY
+});
+```
+
+## CLI Quickstart
 
 Run it without installing:
 
@@ -365,79 +435,6 @@ Environment variables that control tokenization:
 | `TARE_CLAUDE_TOKENIZER`            | `local`, `api` | `local`             | Override `--claude-tokenizer` via env           |
 | `TARE_ANTHROPIC_MODEL`             | model ID       | `claude-sonnet-4-6` | Model used for API-backed token counting        |
 | `TARE_DISABLE_ANTHROPIC_TOKEN_API` | `1`            | unset               | Disable API-backed counting even when requested |
-
-## Using tare-mcp in your agent
-
-Production agents often do not have a stable `.mcp.json` file to inspect. They connect to MCP servers, call `tools/list`, and pass those tool definitions to the model on each request.
-
-Use `measureTools()` when you already have the tool definitions in memory:
-
-```ts
-import { measureTools } from "tare-mcp";
-
-const tools = await mcpClient.listTools();
-const report = await measureTools(tools);
-
-console.log(
-  `MCP tool surface: ${report.summary.tools} tools, ~${report.summary.estimatedTokens.claude} Claude tokens`
-);
-```
-
-For multiple MCP servers, add `server` per tool so overlap warnings and per-server totals remain useful:
-
-```ts
-import { measureTools } from "tare-mcp";
-
-const last9Tools = await last9Client.listTools();
-const githubTools = await githubClient.listTools();
-
-const report = await measureTools([
-  ...last9Tools.map((tool) => ({ ...tool, server: "last9" })),
-  ...githubTools.map((tool) => ({ ...tool, server: "github" }))
-]);
-```
-
-For unattributed tools, pass a fallback server name:
-
-```ts
-const report = await measureTools(tools, {
-  serverName: "agent"
-});
-```
-
-Budget checks are metadata, not exceptions. That keeps the library easy to use in request paths, logs, and CI:
-
-```ts
-const report = await measureTools(tools, { budget: 40_000 });
-
-if (report.metadata.budgetExceeded) {
-  throw new Error(
-    `MCP tool surface exceeds budget: ~${report.summary.estimatedTokens.claude} Claude tokens`
-  );
-}
-```
-
-Structured logging example:
-
-```ts
-logger.info("mcp.tool_surface", {
-  tools: report.summary.tools,
-  servers: report.summary.servers,
-  tokens_claude: report.summary.estimatedTokens.claude,
-  tokens_openai_cl100k: report.summary.estimatedTokens.openaiCl100k,
-  overlap_clusters: report.overlapClusters.length,
-  budget_exceeded: report.metadata.budgetExceeded ?? false
-});
-```
-
-The programmatic API is local-first. It does not read config files, spawn MCP servers, or call cloud tokenization APIs by default. API-backed Claude token counting is opt-in:
-
-```ts
-const report = await measureTools(tools, {
-  claudeTokenizerMode: "api",
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY
-});
-```
 
 ## Security model
 
