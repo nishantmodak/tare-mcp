@@ -3,10 +3,19 @@ import { z } from "zod";
 import { analyzeServers } from "./analysis/analyze.js";
 import { discoverConfigs } from "./discovery/discoverConfigs.js";
 import { parseConfigFile } from "./discovery/parseConfig.js";
+import { diffReports } from "./diff/diffReports.js";
+import { loadReport, ReportLoadError } from "./diff/loadReport.js";
+import { evaluateDiffThresholds, hasThresholdFailure } from "./diff/thresholds.js";
+import type { DiffTokenizer } from "./diff/diffTypes.js";
 import type { NormalizedServer, InspectedServer } from "./inspectors/types.js";
 import { createStaticInspection } from "./inspectors/staticInspector.js";
 import { inspectStdioServer } from "./inspectors/stdioMcpInspector.js";
 import { inspectStreamableHttpServer } from "./inspectors/streamableHttpMcpInspector.js";
+import {
+  renderDiffHumanReport,
+  renderDiffThresholdFailure
+} from "./reporters/diffHumanReporter.js";
+import { renderDiffJsonReport } from "./reporters/diffJsonReporter.js";
 import {
   budgetActual,
   renderBudgetFailure,
@@ -16,6 +25,7 @@ import {
 import { renderJsonReport } from "./reporters/jsonReporter.js";
 import { TokenEstimator } from "./tokens/countTokens.js";
 import type { ClaudeTokenizerMode } from "./tokens/types.js";
+import { expandHome } from "./utils/fs.js";
 import { VERSION } from "./version.js";
 
 const CliOptionsSchema = z.object({
@@ -28,6 +38,26 @@ const CliOptionsSchema = z.object({
 });
 
 type CliOptions = z.infer<typeof CliOptionsSchema>;
+
+const DiffOptionsSchema = z.object({
+  base: z.string().optional(),
+  head: z.string().optional(),
+  json: z.boolean().default(false),
+  maxTokenIncrease: z.coerce.number().int().nonnegative().optional(),
+  maxToolIncrease: z.coerce.number().int().nonnegative().optional(),
+  maxServerIncrease: z.coerce.number().int().nonnegative().optional(),
+  maxOverlapIncrease: z.coerce.number().int().nonnegative().optional(),
+  tokenizer: z.enum(["claude", "openai"]).default("claude")
+});
+
+type DiffOptions = z.infer<typeof DiffOptionsSchema>;
+
+class UsageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UsageError";
+  }
+}
 
 function normalizeRawOptions(rawOptions: unknown): unknown {
   const raw =
@@ -149,6 +179,100 @@ async function run(rawOptions: unknown): Promise<number> {
   return 0;
 }
 
+async function runDiff(
+  baseArg: string | undefined,
+  headArg: string | undefined,
+  rawOptions: unknown
+): Promise<number> {
+  try {
+    const options = DiffOptionsSchema.parse(rawOptions);
+    const paths = normalizeDiffPaths(baseArg, headArg, options);
+    const [base, head] = await Promise.all([
+      loadReport(expandHome(paths.basePath)),
+      loadReport(expandHome(paths.headPath))
+    ]);
+    const report = diffReports(base.report, head.report, {
+      basePath: base.path,
+      headPath: head.path
+    });
+
+    report.thresholds = evaluateDiffThresholds(report, {
+      maxTokenIncrease: options.maxTokenIncrease,
+      maxToolIncrease: options.maxToolIncrease,
+      maxServerIncrease: options.maxServerIncrease,
+      maxOverlapIncrease: options.maxOverlapIncrease,
+      tokenizer: options.tokenizer as DiffTokenizer
+    });
+
+    if (options.json) {
+      process.stdout.write(renderDiffJsonReport(report));
+    } else {
+      process.stdout.write(renderDiffHumanReport(report, { tokenizer: options.tokenizer }));
+      process.stdout.write(renderDiffThresholdFailure(report, { tokenizer: options.tokenizer }));
+    }
+
+    return hasThresholdFailure(report) ? 1 : 0;
+  } catch (error) {
+    if (isExpectedDiffError(error)) {
+      process.stderr.write(`${formatDiffError(error)}\n`);
+      return 2;
+    }
+
+    throw error;
+  }
+}
+
+function normalizeDiffPaths(
+  baseArg: string | undefined,
+  headArg: string | undefined,
+  options: DiffOptions
+): { basePath: string; headPath: string } {
+  if (baseArg && options.base) {
+    throw new UsageError("Use either positional base report or --base, not both.");
+  }
+
+  if (headArg && options.head) {
+    throw new UsageError("Use either positional head report or --head, not both.");
+  }
+
+  const basePath = options.base ?? baseArg;
+  const headPath = options.head ?? headArg;
+
+  if (!basePath || !headPath) {
+    throw new UsageError(
+      "Provide both reports: tare-mcp diff --base .tare/baseline.json --head /tmp/head.json"
+    );
+  }
+
+  return { basePath, headPath };
+}
+
+function isExpectedDiffError(error: unknown): error is UsageError | ReportLoadError | z.ZodError {
+  return (
+    error instanceof UsageError || error instanceof ReportLoadError || error instanceof z.ZodError
+  );
+}
+
+function formatDiffError(error: UsageError | ReportLoadError | z.ZodError): string {
+  if (error instanceof ReportLoadError) {
+    return ["FAILED: invalid tare-mcp report.", "", error.message].join("\n");
+  }
+
+  if (error instanceof z.ZodError) {
+    const issue = error.issues[0];
+    const field = issue?.path.length ? issue.path.join(".") : "options";
+    const message = issue?.message ?? "Invalid diff options.";
+    return ["FAILED: invalid diff usage.", "", `${field}: ${message}`].join("\n");
+  }
+
+  return [
+    "FAILED: invalid diff usage.",
+    "",
+    error.message,
+    "Run `tare-mcp diff --help` for usage."
+  ].join("\n");
+}
+
 export function createProgram(): Command {
   const program = new Command();
 
@@ -174,6 +298,31 @@ export function createProgram(): Command {
     )
     .action(async (options: unknown) => {
       const exitCode = await run(options);
+      process.exitCode = exitCode;
+    });
+
+  program
+    .command("diff")
+    .description("Compare two tare-mcp JSON reports without inspecting MCP servers.")
+    .argument("[base-report]", "Baseline JSON report from tare-mcp --json.")
+    .argument("[head-report]", "Head JSON report from tare-mcp --json.")
+    .option("--base <path>", "Baseline JSON report from tare-mcp --json.")
+    .option("--head <path>", "Head JSON report from tare-mcp --json.")
+    .option("--json", "Output JSON diff report.")
+    .option("--max-token-increase <tokens>", "Fail if token increase exceeds this value.")
+    .option("--max-tool-increase <tools>", "Fail if tool count increase exceeds this value.")
+    .option("--max-server-increase <servers>", "Fail if server count increase exceeds this value.")
+    .option(
+      "--max-overlap-increase <clusters>",
+      "Fail if new overlap cluster count exceeds this value."
+    )
+    .option(
+      "--tokenizer <name>",
+      "Tokenizer for --max-token-increase: claude or openai. Default: claude.",
+      "claude"
+    )
+    .action(async (baseArg: string | undefined, headArg: string | undefined, options: unknown) => {
+      const exitCode = await runDiff(baseArg, headArg, options);
       process.exitCode = exitCode;
     });
 
