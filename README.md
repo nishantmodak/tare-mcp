@@ -39,6 +39,7 @@ but for agent tool context.
 - [Security Model](#security-model)
 - [Config Discovery](#config-discovery)
 - [JSON Usage](#json-usage)
+- [PR Regression Checks](#pr-regression-checks)
 - [CI Usage](#ci-usage)
 - [Publishing to npm](#publishing-to-npm)
 - [CLI](#cli)
@@ -280,7 +281,7 @@ Recommendations:
 
 ## Supported transports
 
-v0.1 supports live inspection for:
+v0.2 supports live inspection for:
 
 - stdio MCP servers
 - Streamable HTTP MCP servers
@@ -401,6 +402,89 @@ The JSON report includes:
 
 Secrets from env vars and headers are redacted.
 
+## PR regression checks
+
+`tare-mcp diff` compares two `tare-mcp --json` reports. It is built for pull requests: generate a fresh report in CI, compare it to a committed baseline, and fail when the MCP surface grows beyond a threshold.
+
+Diff mode only reads JSON files. It does not spawn stdio servers, call hosted MCP URLs, or re-run live inspection.
+
+Create an auditable baseline and commit it:
+
+```bash
+mkdir -p .tare
+npx tare-mcp --json > .tare/baseline.json
+git add .tare/baseline.json
+```
+
+Compare the current branch against that baseline:
+
+```bash
+npx tare-mcp --json > tare-report.json
+npx tare-mcp diff --base .tare/baseline.json --head tare-report.json
+```
+
+Example output:
+
+```txt
+tare-mcp diff - MCP context regression
+
+Base: .tare/baseline.json (0.2.0)
+Head: tare-report.json (0.2.0)
+
+Summary:
+- Servers: 3 -> 4 (+1)
+- Tools: 418 -> 443 (+25)
+- Claude tokens: ~143,200 -> ~151,620 (~+8,420)
+- OpenAI cl100k tokens: ~138,400 -> ~146,310 (~+7,910)
+- Overlap clusters: 2 -> 3 (+1)
+
+New servers:
+- notion: 96 tools, ~41,800 Claude tokens
+
+Largest changes to existing servers:
+- github: 188 -> 200 (+12) tools, ~+8,420 Claude tokens
+```
+
+Fail a PR when context weight or tool surface grows too much:
+
+```bash
+npx tare-mcp diff \
+  --base .tare/baseline.json \
+  --head tare-report.json \
+  --max-token-increase 5000 \
+  --max-tool-increase 20 \
+  --max-server-increase 1 \
+  --max-overlap-increase 0
+```
+
+Token thresholds use the Claude estimate by default. Use OpenAI cl100k estimates when that is the budget you care about:
+
+```bash
+npx tare-mcp diff \
+  --base .tare/baseline.json \
+  --head tare-report.json \
+  --max-token-increase 5000 \
+  --tokenizer openai
+```
+
+Human output shows new servers, removed servers, largest changes to existing servers, new tools, removed tools, changed tools, and overlap-cluster changes. JSON output is available for automation:
+
+```bash
+npx tare-mcp diff --base .tare/baseline.json --head tare-report.json --json
+```
+
+When a growth is intentional, regenerate `.tare/baseline.json` on the accepted setup and commit that change in the same PR.
+
+Exit codes:
+
+| Code | Meaning |
+|---:|---|
+| `0` | Diff completed and thresholds passed, or no thresholds were set. |
+| `1` | A configured regression threshold was exceeded. |
+| `2` | Invalid usage or invalid input, including missing files, invalid JSON, or missing report fields. |
+
+Estimates are still estimates. The value of the baseline workflow is consistency: the same tool estimates are compared over time, so accidental MCP bloat becomes visible during review.
+
 ## CI usage
 
 ```yaml
@@ -419,6 +503,36 @@ jobs:
         with:
           node-version: 20
       - run: npx tare-mcp --budget 40000
+```
+
+For PR regression checks, commit `.tare/baseline.json` and compare the generated report in CI:
+
+```yaml
+name: MCP context regression
+
+on:
+  pull_request:
+
+jobs:
+  tare-mcp:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npx tare-mcp --json > tare-report.json
+
+      - run: |
+          npx tare-mcp diff \
+            --base .tare/baseline.json \
+            --head tare-report.json \
+            --max-token-increase 5000 \
+            --max-tool-increase 20 \
+            --max-overlap-increase 0
 ```
 
 For CI systems that should not execute local MCP server commands, use static-only mode and treat the result as insufficient:
@@ -489,9 +603,29 @@ Options:
   -h, --help                   Display help.
 ```
 
+```txt
+Usage: tare-mcp diff [options] [base-report] [head-report]
+
+Compare two tare-mcp JSON reports without inspecting MCP servers.
+
+Options:
+  --base <path>                      Baseline JSON report from tare-mcp --json.
+  --head <path>                      Head JSON report from tare-mcp --json.
+  --json                             Output JSON diff report.
+  --max-token-increase <tokens>      Fail if token increase exceeds this value.
+  --max-tool-increase <tools>        Fail if tool count increase exceeds this value.
+  --max-server-increase <servers>    Fail if server count increase exceeds this value.
+  --max-overlap-increase <clusters>  Fail if new overlap cluster count exceeds this value.
+  --tokenizer <name>                 Tokenizer for --max-token-increase: claude or openai.
+```
+
 ## Roadmap
 
-v0.2 targets:
+v0.2:
+- [x] PR diff/regression mode for JSON reports
+- [x] Threshold flags for token, tool, server, and overlap growth
+
+Next:
 - [ ] Per-tool schema breakdown
 - [ ] Context budget config file (`tare.config.json`)
 
@@ -499,13 +633,12 @@ Later:
 - [ ] Better SSE fallback
 - [ ] Improved Claude local token estimator
 - [ ] Opt-in API-backed token counting improvements
-- [ ] GitHub Actions integration
+- [ ] Dedicated GitHub Action wrapper
 - [ ] HTML reports
-- [ ] Compare mode
 - [ ] MCP profile generator
 - [ ] `tare-mcp --fix` to generate lean MCP profiles
 
-Compare mode, dashboards, profile generation, and auto-fix are intentionally not part of v0.1.
+Dashboards, profile generation, and auto-fix are intentionally not part of v0.2.
 
 ## License
 
