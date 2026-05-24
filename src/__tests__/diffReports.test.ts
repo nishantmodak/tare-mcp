@@ -83,6 +83,7 @@ describe("diff thresholds", () => {
       { flag: "--max-server-increase", allowed: 1, actual: 1, exceeded: false },
       { flag: "--max-overlap-increase", allowed: 0, actual: 1, exceeded: true }
     ]);
+    expect(Object.hasOwn(diff.thresholds[1] ?? {}, "tokenizer")).toBe(false);
     expect(hasThresholdFailure(diff)).toBe(true);
   });
 });
@@ -107,11 +108,7 @@ describe("diff report loading", () => {
     const dir = await tempDir();
     try {
       const filePath = path.join(dir.path, "bad.json");
-      await writeFile(
-        filePath,
-        JSON.stringify({ not: "a tare report at all" }),
-        "utf8"
-      );
+      await writeFile(filePath, JSON.stringify({ not: "a tare report at all" }), "utf8");
 
       await expect(loadReport(filePath)).rejects.toThrow(ReportLoadError);
     } finally {
@@ -128,6 +125,33 @@ describe("diff reporters", () => {
     expect(output).toContain("- notion: 2 tools");
     expect(output).toContain("Largest changes to existing servers:");
     expect(output).toContain("- github:");
+  });
+
+  it("uses the selected tokenizer in server and tool detail sections", () => {
+    const output = renderDiffHumanReport(buildDiff(), { tokenizer: "openai" });
+
+    expect(output).toContain("- notion: 2 tools, ~990 OpenAI cl100k tokens");
+    expect(output).toContain("- github: 2 -> 3 (+1) tools, ~+450 OpenAI cl100k tokens");
+    expect(output).toContain("- slack.search_messages: ~560 OpenAI cl100k tokens");
+    expect(output).toContain("- github.search_code: ~+90 OpenAI cl100k tokens");
+    expect(output).not.toContain("~1,100 Claude tokens");
+  });
+
+  it("renders token thresholds as approximate estimates only for token flags", () => {
+    const diff = buildDiff();
+    diff.thresholds = evaluateDiffThresholds(diff, {
+      maxTokenIncrease: 1000,
+      maxToolIncrease: 2,
+      tokenizer: "claude"
+    });
+
+    const output = renderDiffHumanReport(diff, { tokenizer: "claude" });
+    const failure = renderDiffThresholdFailure(diff, { tokenizer: "claude" });
+
+    expect(output).toContain("--max-token-increase: fail (~1,800 / ~1,000 Claude tokens)");
+    expect(output).toContain("--max-tool-increase: fail (3 / 2 tools)");
+    expect(failure).toContain("--max-token-increase: allowed ~1,000, actual ~1,800 Claude tokens");
+    expect(failure).toContain("--max-tool-increase: allowed 2, actual 3 tools");
   });
 
   it("renders threshold failure details with top offenders", () => {

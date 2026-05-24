@@ -55,11 +55,14 @@ function addThreshold(
   }
 
   const actualIncrease = Math.max(0, input.actual);
-  results.push({
+  const result: ThresholdResult = {
     flag: input.flag,
-    tokenizer: input.tokenizer,
     allowed: input.allowed,
     actual: actualIncrease,
     exceeded: actualIncrease > input.allowed
-  });
+  };
+  if (input.tokenizer !== undefined) {
+    result.tokenizer = input.tokenizer;
+  }
+  results.push(result);
 }

@@ -47,12 +47,12 @@ export function renderDiffHumanReport(
   );
   lines.push(`- Overlap clusters: ${formatDeltaLine(report.summary.overlapClusters)}`);
 
-  pushServerSection(lines, "New servers", report.servers.added);
-  pushServerSection(lines, "Removed servers", report.servers.removed);
-  pushServerChangeSection(lines, report.servers.changed);
-  pushToolSection(lines, "New tools", report.tools.added);
-  pushToolSection(lines, "Removed tools", report.tools.removed);
-  pushToolChangeSection(lines, report.tools.changed);
+  pushServerSection(lines, "New servers", report.servers.added, options.tokenizer);
+  pushServerSection(lines, "Removed servers", report.servers.removed, options.tokenizer);
+  pushServerChangeSection(lines, report.servers.changed, options.tokenizer);
+  pushToolSection(lines, "New tools", report.tools.added, options.tokenizer);
+  pushToolSection(lines, "Removed tools", report.tools.removed, options.tokenizer);
+  pushToolChangeSection(lines, report.tools.changed, options.tokenizer);
   pushOverlapSection(lines, report);
   pushThresholdSection(lines, report, options.tokenizer);
   pushRecommendations(lines, report);
@@ -77,8 +77,10 @@ export function renderDiffThresholdFailure(
 
   for (const failure of failures) {
     const label = thresholdLabel(failure.flag, failure.tokenizer ?? options.tokenizer);
+    const isToken = failure.flag === "--max-token-increase";
+    const fmt = isToken ? approx : formatNumber;
     lines.push(
-      `${failure.flag}: allowed ${formatNumber(failure.allowed)}, actual ${formatNumber(failure.actual)} ${label}`
+      `${failure.flag}: allowed ${fmt(failure.allowed)}, actual ${fmt(failure.actual)} ${label}`
     );
   }
 
@@ -107,63 +109,86 @@ export function renderDiffThresholdFailure(
   return `${lines.join("\n")}\n`;
 }
 
-function pushServerSection(lines: string[], title: string, servers: DiffServer[]): void {
+function pushServerSection(
+  lines: string[],
+  title: string,
+  servers: DiffServer[],
+  tokenizer: DiffTokenizer
+): void {
   if (servers.length === 0) {
     return;
   }
 
   lines.push("");
   lines.push(`${title}:`);
+  const tokenizerLabel = tokenizer === "openai" ? "OpenAI cl100k" : "Claude";
   for (const server of servers.slice(0, 10)) {
     lines.push(
-      `- ${server.name}: ${server.toolCount} tools, ${approx(server.estimatedTokens.claude)} Claude tokens`
+      `- ${server.name}: ${server.toolCount} tools, ${approx(tokenValue(server.estimatedTokens, tokenizer))} ${tokenizerLabel} tokens`
     );
   }
 }
 
-function pushServerChangeSection(lines: string[], servers: DiffServerChange[]): void {
+function pushServerChangeSection(
+  lines: string[],
+  servers: DiffServerChange[],
+  tokenizer: DiffTokenizer
+): void {
   const materialChanges = servers.filter(
-    (server) => server.toolCount.delta !== 0 || server.estimatedTokens.delta.claude !== 0
+    (server) =>
+      server.toolCount.delta !== 0 || tokenValue(server.estimatedTokens.delta, tokenizer) !== 0
   );
 
   if (materialChanges.length === 0) {
     return;
   }
 
+  const tokenizerLabel = tokenizer === "openai" ? "OpenAI cl100k" : "Claude";
   lines.push("");
   lines.push("Largest changes to existing servers:");
   for (const server of materialChanges.slice(0, 10)) {
     lines.push(
       `- ${server.name}: ${formatDeltaLine(server.toolCount)} tools, ${approxSigned(
-        server.estimatedTokens.delta.claude
-      )} Claude tokens`
+        tokenValue(server.estimatedTokens.delta, tokenizer)
+      )} ${tokenizerLabel} tokens`
     );
   }
 }
 
-function pushToolSection(lines: string[], title: string, tools: DiffTool[]): void {
+function pushToolSection(
+  lines: string[],
+  title: string,
+  tools: DiffTool[],
+  tokenizer: DiffTokenizer
+): void {
   if (tools.length === 0) {
     return;
   }
 
   lines.push("");
   lines.push(`${title}:`);
+  const tokenizerLabel = tokenizer === "openai" ? "OpenAI cl100k" : "Claude";
   for (const tool of tools.slice(0, 10)) {
     lines.push(
-      `- ${tool.server}.${tool.name}: ${approx(tool.estimatedTokens.claude)} Claude tokens`
+      `- ${tool.server}.${tool.name}: ${approx(tokenValue(tool.estimatedTokens, tokenizer))} ${tokenizerLabel} tokens`
     );
   }
 }
 
-function pushToolChangeSection(lines: string[], tools: DiffToolChange[]): void {
+function pushToolChangeSection(
+  lines: string[],
+  tools: DiffToolChange[],
+  tokenizer: DiffTokenizer
+): void {
   const materialChanges = tools.filter(
-    (tool) => tool.estimatedTokens.delta.claude !== 0 || tool.descriptionChanged
+    (tool) => tokenValue(tool.estimatedTokens.delta, tokenizer) !== 0 || tool.descriptionChanged
   );
 
   if (materialChanges.length === 0) {
     return;
   }
 
+  const tokenizerLabel = tokenizer === "openai" ? "OpenAI cl100k" : "Claude";
   lines.push("");
   lines.push("Largest changes to existing tools:");
   for (const tool of materialChanges.slice(0, 10)) {
@@ -174,8 +199,8 @@ function pushToolChangeSection(lines: string[], tools: DiffToolChange[]): void {
     const suffix = notes.length > 0 ? ` (${notes.join(", ")})` : "";
     lines.push(
       `- ${tool.server}.${tool.name}: ${approxSigned(
-        tool.estimatedTokens.delta.claude
-      )} Claude tokens${suffix}`
+        tokenValue(tool.estimatedTokens.delta, tokenizer)
+      )} ${tokenizerLabel} tokens${suffix}`
     );
   }
 }
@@ -219,10 +244,10 @@ function pushThresholdSection(
   for (const threshold of report.thresholds) {
     const status = threshold.exceeded ? pc.red("fail") : pc.green("pass");
     const label = thresholdLabel(threshold.flag, threshold.tokenizer ?? tokenizer);
+    const isToken = threshold.flag === "--max-token-increase";
+    const fmt = isToken ? approx : formatNumber;
     lines.push(
-      `- ${threshold.flag}: ${status} (${formatNumber(threshold.actual)} / ${formatNumber(
-        threshold.allowed
-      )} ${label})`
+      `- ${threshold.flag}: ${status} (${fmt(threshold.actual)} / ${fmt(threshold.allowed)} ${label})`
     );
   }
 }
