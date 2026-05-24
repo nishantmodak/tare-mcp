@@ -25,8 +25,23 @@ export { OpenAICl100kCounter } from "./tokens/openaiCl100kCounter.js";
 export { LocalClaudeEstimator } from "./tokens/claudeEstimator.js";
 export { renderHumanReport, renderBudgetFailure } from "./reporters/humanReporter.js";
 export { renderJsonReport } from "./reporters/jsonReporter.js";
+export { loadReport, TareReportSchema, ReportLoadError } from "./diff/loadReport.js";
 
 export type { TareReport, OverlapCluster, AnalyzedTool } from "./analysis/types.js";
+export type {
+  DiffOverlapCluster,
+  DiffServer,
+  DiffServerChange,
+  DiffThresholdOptions,
+  DiffTokenizer,
+  DiffTokenTotals,
+  DiffTool,
+  DiffToolChange,
+  NumericDelta,
+  TareDiffReport,
+  ThresholdResult,
+  TokenDelta
+} from "./diff/diffTypes.js";
 export type {
   ClaudeTokenizerMode,
   DualTokenEstimate,
