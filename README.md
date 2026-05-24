@@ -176,7 +176,7 @@ logger.info("mcp.tool_surface", {
 });
 ```
 
-Integration reference: [Last9](https://last9.io/) is integrating `tare-mcp` under its MCP client to log `mcp.tool_surface` at agent startup. See [last9/ai#143](https://github.com/last9/ai/pull/143).
+Integration reference: [Last9](https://last9.io/) uses `tare-mcp` under its MCP client to log `mcp.tool_surface` at agent startup.
 
 The programmatic API is local-first. It does not read config files, spawn MCP servers, or call cloud tokenization APIs by default. API-backed Claude token counting is opt-in:
 
