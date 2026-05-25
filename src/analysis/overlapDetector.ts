@@ -1,5 +1,37 @@
-import TfIdf from "natural/lib/natural/tfidf/tfidf.js";
 import type { AnalyzedTool, OverlapCluster } from "./types.js";
+
+class TfIdf {
+  private docs: string[][] = [];
+
+  addDocument(tokens: string[], _id?: number): void {
+    this.docs.push(tokens);
+  }
+
+  listTerms(index: number): Array<{ term: string; tfidf: number }> {
+    const doc = this.docs[index] ?? [];
+    const n = this.docs.length;
+
+    const tf = new Map<string, number>();
+    for (const term of doc) {
+      tf.set(term, (tf.get(term) ?? 0) + 1);
+    }
+
+    const df = new Map<string, number>();
+    for (const d of this.docs) {
+      for (const term of new Set(d)) {
+        df.set(term, (df.get(term) ?? 0) + 1);
+      }
+    }
+
+    const result: Array<{ term: string; tfidf: number }> = [];
+    for (const [term, count] of tf) {
+      const termTf = count / doc.length;
+      const idf = Math.log(n / (df.get(term) ?? 1));
+      result.push({ term, tfidf: termTf * idf });
+    }
+    return result.sort((a, b) => b.tfidf - a.tfidf);
+  }
+}
 
 type Signal = "tfidf" | "intent-heuristic";
 

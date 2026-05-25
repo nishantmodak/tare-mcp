@@ -51,24 +51,22 @@
     "context"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "latest",
-    "commander": "latest",
-    "fast-glob": "latest",
-    "gpt-tokenizer": "latest",
-    "natural": "latest",
-    "picocolors": "latest",
-    "zod": "latest"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^14.0.3",
+    "fast-glob": "^3.3.3",
+    "gpt-tokenizer": "^3.4.0",
+    "picocolors": "^1.1.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "latest",
-    "@types/natural": "latest",
-    "@types/node": "latest",
-    "eslint": "latest",
-    "prettier": "latest",
-    "tsup": "latest",
-    "tsx": "latest",
-    "typescript": "latest",
-    "typescript-eslint": "latest",
-    "vitest": "latest"
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.1",
+    "eslint": "^10.4.0",
+    "prettier": "^3.8.3",
+    "tsup": "^8.5.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
+    "vitest": "^4.1.7"
   }
 }
