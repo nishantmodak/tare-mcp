@@ -55,7 +55,7 @@ export function buildLogRecords(
     }
   ];
 
-  if (budgetExceeded && budget !== undefined) {
+  if (budgetExceeded) {
     const warnAttrs: OtlpAttribute[] = [
       attr("tokens_claude", { intValue: tokensClaude }),
       attr("budget_tokens", { intValue: budget }),
