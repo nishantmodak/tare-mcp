@@ -14,6 +14,8 @@ describe("config discovery", () => {
       "/repo/.cursor/mcp.json",
       "/repo/.vscode/mcp.json",
       "/home/alice/.claude/mcp.json",
+      "/home/alice/.claude/settings.json",
+      "/home/alice/.claude/settings.local.json",
       "/home/alice/Library/Application Support/Claude/claude_desktop_config.json",
       "/home/alice/.config/Claude/claude_desktop_config.json",
       "/home/alice/.config/claude/claude_desktop_config.json",

@@ -7,6 +7,8 @@ const LOCAL_CONFIG_PATTERNS = [".mcp.json", "mcp.json", ".cursor/mcp.json", ".vs
 
 const HOME_CONFIG_PATTERNS = [
   "~/.claude/mcp.json",
+  "~/.claude/settings.json",
+  "~/.claude/settings.local.json",
   "~/Library/Application Support/Claude/claude_desktop_config.json",
   "~/.config/Claude/claude_desktop_config.json",
   "~/.config/claude/claude_desktop_config.json",
