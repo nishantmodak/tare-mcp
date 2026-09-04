@@ -1,4 +1,4 @@
-import { encode } from "gpt-tokenizer";
+import { encode } from "gpt-tokenizer/encoding/cl100k_base";
 import type { TokenCounter, TokenEstimate } from "./types.js";
 
 export class OpenAICl100kCounter implements TokenCounter {

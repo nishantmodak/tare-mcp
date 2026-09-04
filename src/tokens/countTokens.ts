@@ -18,6 +18,9 @@ type QueueTask<T> = {
   reject: (error: unknown) => void;
 };
 
+const ANTHROPIC_FAILURE_THRESHOLD = 3;
+const ANTHROPIC_RETRY_COOLDOWN_MS = 1000;
+
 class PromiseQueue {
   private active = 0;
   private readonly tasks: Array<QueueTask<unknown>> = [];
@@ -55,7 +58,8 @@ export class TokenEstimator {
   private readonly cache = new TokenCache();
   private readonly openAiCounter = new OpenAICl100kCounter();
   private readonly anthropicQueue = new PromiseQueue(3);
-  private anthropicApiUnavailable = false;
+  private anthropicFailureCount = 0;
+  private anthropicRetryAt = 0;
   private emittedMissingKeyWarning = false;
   private emittedDisabledWarning = false;
   private emittedApiFailureWarning = false;
@@ -101,17 +105,23 @@ export class TokenEstimator {
       return new LocalClaudeEstimator(async () => openAiEstimate).count(text);
     }
 
-    if (this.anthropicApiUnavailable) {
+    if (Date.now() < this.anthropicRetryAt) {
       return new LocalClaudeEstimator(async () => openAiEstimate).count(text);
     }
 
     try {
-      return await this.anthropicQueue.push(() => this.countClaudeWithApi(text));
+      const estimate = await this.anthropicQueue.push(() => this.countClaudeWithApi(text));
+      this.anthropicFailureCount = 0;
+      this.anthropicRetryAt = 0;
+      return estimate;
     } catch {
-      this.anthropicApiUnavailable = true;
+      this.anthropicFailureCount += 1;
+      if (this.anthropicFailureCount >= ANTHROPIC_FAILURE_THRESHOLD) {
+        this.anthropicRetryAt = Date.now() + ANTHROPIC_RETRY_COOLDOWN_MS;
+      }
       if (!this.emittedApiFailureWarning) {
         this.options.onWarning?.(
-          "Claude API token counting failed. Falling back to local Claude approximation."
+          "Claude API token counting failed. Falling back to local Claude approximation; later counts will retry automatically."
         );
         this.emittedApiFailureWarning = true;
       }
