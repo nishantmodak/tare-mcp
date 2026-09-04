@@ -92,6 +92,6 @@ export type TareReport = {
     inspectionMode: "live default" | "static-only" | "programmatic";
     budgetExceeded?: boolean;
     budgetTokens?: number;
-    budgetTokenizer?: "claude";
+    budgetTokenizer?: "claude" | "openai";
   };
 };

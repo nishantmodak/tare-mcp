@@ -13,6 +13,7 @@ describe("config discovery", () => {
       "/repo/mcp.json",
       "/repo/.cursor/mcp.json",
       "/repo/.vscode/mcp.json",
+      "/home/alice/.claude.json",
       "/home/alice/.claude/mcp.json",
       "/home/alice/.claude/settings.json",
       "/home/alice/.claude/settings.local.json",
@@ -32,6 +33,31 @@ describe("config discovery", () => {
 
       const result = await discoverConfigs(home.path, home.path);
       expect(result.paths).toContain(path.join(home.path, ".claude", "mcp.json"));
+    } finally {
+      await home.cleanup();
+    }
+  });
+
+  it("discovers ~/.claude.json for Claude Code user-scope servers", async () => {
+    const home = await tempDir();
+    try {
+      await writeFile(path.join(home.path, ".claude.json"), "{}");
+
+      const result = await discoverConfigs(home.path, home.path);
+      expect(result.paths).toContain(path.join(home.path, ".claude.json"));
+    } finally {
+      await home.cleanup();
+    }
+  });
+
+  it("ignores directories at fixed home config paths", async () => {
+    const home = await tempDir();
+    try {
+      const configDirectory = path.join(home.path, ".claude", "mcp.json");
+      await mkdir(configDirectory, { recursive: true });
+
+      const result = await discoverConfigs(home.path, home.path);
+      expect(result.paths).not.toContain(configDirectory);
     } finally {
       await home.cleanup();
     }

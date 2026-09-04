@@ -3,6 +3,7 @@ import type {
   DiffOverlapCluster,
   DiffServer,
   DiffServerChange,
+  DiffTokenizer,
   DiffTokenTotals,
   DiffTool,
   DiffToolChange,
@@ -17,6 +18,7 @@ export type DiffReportsOptions = {
   basePath: string;
   headPath: string;
   generatedAt?: string;
+  tokenizer?: DiffTokenizer;
 };
 
 type ReportServer = TareReport["servers"][number];
@@ -68,7 +70,7 @@ export function diffReports(
     warnings: buildWarnings(baseReport, headReport)
   };
 
-  report.recommendations = buildDiffRecommendations(report);
+  report.recommendations = buildDiffRecommendations(report, options.tokenizer ?? "claude");
   return report;
 }
 
@@ -295,10 +297,17 @@ function buildWarnings(baseReport: TareReport, headReport: TareReport): string[]
   return warnings;
 }
 
-function buildDiffRecommendations(report: TareDiffReport): TareDiffReport["recommendations"] {
+export function buildDiffRecommendations(
+  report: TareDiffReport,
+  tokenizer: DiffTokenizer
+): TareDiffReport["recommendations"] {
   const recommendations: TareDiffReport["recommendations"] = [];
 
-  if (positiveIncrease(report.summary.estimatedTokens.delta.claude) > 0) {
+  const tokenIncrease =
+    tokenizer === "openai"
+      ? report.summary.estimatedTokens.delta.openaiCl100k
+      : report.summary.estimatedTokens.delta.claude;
+  if (positiveIncrease(tokenIncrease) > 0) {
     recommendations.push({
       type: "budget",
       message: "Review the largest token increases before merging this MCP config change."
@@ -321,10 +330,18 @@ function buildDiffRecommendations(report: TareDiffReport): TareDiffReport["recom
   }
 
   if (recommendations.length === 0) {
-    recommendations.push({
-      type: "status",
-      message: "No MCP context regression was detected in this diff."
-    });
+    recommendations.push(
+      report.thresholds.some((threshold) => threshold.exceeded)
+        ? {
+            type: "threshold",
+            message:
+              "Review the failed regression thresholds before merging this MCP config change."
+          }
+        : {
+            type: "status",
+            message: "No MCP context regression was detected in this diff."
+          }
+    );
   }
 
   return recommendations;

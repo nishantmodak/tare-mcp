@@ -64,20 +64,36 @@ export function parseConfigText(text: string, sourceConfigPath: string): ParsedC
 
   const servers: NormalizedServer[] = [];
   const warnings: string[] = [];
-  const seen = new Set<string>();
+  const serverIndexes = new Map<string, number>();
 
   for (const map of maps) {
     for (const [name, serverConfig] of Object.entries(map)) {
-      if (seen.has(name)) {
+      const existingIndex = serverIndexes.get(name);
+      const existing = existingIndex === undefined ? undefined : servers[existingIndex];
+      if (existing && !existing.disabled) {
         warnings.push(`${sourceConfigPath}: duplicate server "${name}" was ignored.`);
         continue;
       }
 
       const normalized = normalizeServer(name, serverConfig, sourceConfigPath);
       warnings.push(...normalized.warnings);
-      if (normalized.server) {
-        seen.add(name);
+      if (!normalized.server) {
+        continue;
+      }
+
+      if (existingIndex === undefined) {
+        serverIndexes.set(name, servers.length);
         servers.push(normalized.server);
+        continue;
+      }
+
+      if (existing?.disabled && !normalized.server.disabled) {
+        servers[existingIndex] = normalized.server;
+        warnings.push(
+          `${sourceConfigPath}: disabled server "${name}" was replaced by a later enabled definition.`
+        );
+      } else {
+        warnings.push(`${sourceConfigPath}: duplicate server "${name}" was ignored.`);
       }
     }
   }

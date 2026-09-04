@@ -26,7 +26,7 @@ class TfIdf {
     const result: Array<{ term: string; tfidf: number }> = [];
     for (const [term, count] of tf) {
       const termTf = count / doc.length;
-      const idf = Math.log(n / (df.get(term) ?? 1));
+      const idf = 1 + Math.log(n / (1 + (df.get(term) ?? 0)));
       result.push({ term, tfidf: termTf * idf });
     }
     return result.sort((a, b) => b.tfidf - a.tfidf);
@@ -42,6 +42,7 @@ type Edge = {
   signals: Set<Signal>;
   reason: string;
   label: string;
+  verb?: VerbBucket;
 };
 
 const STOPWORDS = new Set([
@@ -199,7 +200,7 @@ function intentEdge(
   right: AnalyzedTool,
   leftBuckets: ReturnType<typeof buckets>,
   rightBuckets: ReturnType<typeof buckets>
-): Pick<Edge, "score" | "signals" | "reason" | "label"> | undefined {
+): Pick<Edge, "score" | "signals" | "reason" | "label" | "verb"> | undefined {
   const sharedVerbs = intersection(leftBuckets.verbs, rightBuckets.verbs);
   const sharedNouns = intersection(leftBuckets.nouns, rightBuckets.nouns);
 
@@ -208,7 +209,8 @@ function intentEdge(
       score: 0.75,
       signals: new Set(["intent-heuristic"]),
       reason: "tools share a search intent",
-      label: "search intent"
+      label: "search intent",
+      verb: "search"
     };
   }
 
@@ -220,7 +222,8 @@ function intentEdge(
       score: 0.7,
       signals: new Set(["intent-heuristic"]),
       reason: `tools share ${strongVerb} and ${noun} intent buckets`,
-      label: labelFor(strongVerb, noun)
+      label: labelFor(strongVerb, noun),
+      verb: strongVerb
     };
   }
 
@@ -334,7 +337,8 @@ export class OverlapDetector {
             reason:
               heuristic?.reason ??
               `tool definitions have TF-IDF cosine similarity ${similarity.toFixed(2)}`,
-            label: heuristic?.label ?? "similar tools"
+            label: heuristic?.label ?? "similar tools",
+            verb: heuristic?.verb
           });
         }
       }
@@ -355,9 +359,7 @@ export class OverlapDetector {
         const label = mergeLabels(componentEdges);
         const maxScore = Math.max(...componentEdges.map((edge) => edge.score));
         const reason = componentEdges[0]?.reason ?? "tools appear similar";
-        const verb = componentEdges.some((edge) => edge.label.includes("write"))
-          ? "write"
-          : undefined;
+        const verb = componentEdges.some((edge) => edge.verb === "write") ? "write" : undefined;
 
         return {
           label,
