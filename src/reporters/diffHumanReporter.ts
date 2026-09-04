@@ -146,7 +146,12 @@ function pushServerChangeSection(
   const tokenizerLabel = tokenizer === "openai" ? "OpenAI cl100k" : "Claude";
   lines.push("");
   lines.push("Largest changes to existing servers:");
-  for (const server of materialChanges.slice(0, 10)) {
+  const sortedChanges = [...materialChanges].sort(
+    (a, b) =>
+      Math.abs(tokenValue(b.estimatedTokens.delta, tokenizer)) -
+        Math.abs(tokenValue(a.estimatedTokens.delta, tokenizer)) || a.name.localeCompare(b.name)
+  );
+  for (const server of sortedChanges.slice(0, 10)) {
     lines.push(
       `- ${server.name}: ${formatDeltaLine(server.toolCount)} tools, ${approxSigned(
         tokenValue(server.estimatedTokens.delta, tokenizer)
@@ -191,7 +196,13 @@ function pushToolChangeSection(
   const tokenizerLabel = tokenizer === "openai" ? "OpenAI cl100k" : "Claude";
   lines.push("");
   lines.push("Largest changes to existing tools:");
-  for (const tool of materialChanges.slice(0, 10)) {
+  const sortedChanges = [...materialChanges].sort(
+    (a, b) =>
+      Math.abs(tokenValue(b.estimatedTokens.delta, tokenizer)) -
+        Math.abs(tokenValue(a.estimatedTokens.delta, tokenizer)) ||
+      `${a.server}.${a.name}`.localeCompare(`${b.server}.${b.name}`)
+  );
+  for (const tool of sortedChanges.slice(0, 10)) {
     const notes = [
       tool.descriptionChanged ? "description changed" : undefined,
       tool.inputSchemaPresenceChanged ? "schema presence changed" : undefined

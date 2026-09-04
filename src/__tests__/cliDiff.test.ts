@@ -57,6 +57,49 @@ describe("tare-mcp diff CLI", () => {
     }
   });
 
+  it("never claims no regression when an OpenAI-token threshold fails", async () => {
+    const dir = await tempDir();
+    try {
+      const base = baseReport();
+      const head = baseReport();
+      head.summary.estimatedTokens.openaiCl100k += 100;
+      const basePath = path.join(dir.path, "base.json");
+      const headPath = path.join(dir.path, "head.json");
+      await writeFile(basePath, JSON.stringify(base), "utf8");
+      await writeFile(headPath, JSON.stringify(head), "utf8");
+
+      const result = await runCli([
+        "diff",
+        "--base",
+        basePath,
+        "--head",
+        headPath,
+        "--json",
+        "--tokenizer",
+        "openai",
+        "--max-token-increase",
+        "50"
+      ]);
+      const parsed = JSON.parse(result.stdout) as TareDiffReport;
+
+      expect(result.code).toBe(1);
+      expect(parsed.thresholds[0]).toMatchObject({
+        tokenizer: "openai",
+        actual: 100,
+        exceeded: true
+      });
+      expect(parsed.recommendations).toContainEqual({
+        type: "budget",
+        message: "Review the largest token increases before merging this MCP config change."
+      });
+      expect(parsed.recommendations.map((entry) => entry.message).join("\n")).not.toContain(
+        "No MCP context regression"
+      );
+    } finally {
+      await dir.cleanup();
+    }
+  });
+
   it("exits 2 for invalid diff input", async () => {
     const result = await runCli([
       "diff",
