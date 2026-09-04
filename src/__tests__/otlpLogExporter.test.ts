@@ -8,7 +8,7 @@ function makeRecord(): OtlpLogRecord {
     severityNumber: 9,
     severityText: "INFO",
     body: { stringValue: "mcp.tool_surface" },
-    attributes: [{ key: "tools", value: { intValue: 5 } }]
+    attributes: [{ key: "tools", value: { intValue: "5" } }]
   };
 }
 
@@ -182,7 +182,6 @@ describe("exportOtlpLogs", () => {
 
   it("handles non-Error thrown value without throwing", async () => {
     vi.stubGlobal("fetch", async () => {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw "string-error";
     });
     const stderrWrites: string[] = [];

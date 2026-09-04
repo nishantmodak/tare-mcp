@@ -1,5 +1,9 @@
 import { analyzeServers } from "../analysis/analyze.js";
 import { discoverConfigs } from "../discovery/discoverConfigs.js";
+import {
+  discoverSessionServers,
+  mergeSessionServers
+} from "../discovery/discoverSessionServers.js";
 import { parseConfigFile } from "../discovery/parseConfig.js";
 import { createStaticInspection } from "../inspectors/staticInspector.js";
 import { inspectStdioServer } from "../inspectors/stdioMcpInspector.js";
@@ -13,39 +17,32 @@ import { readHookPayload } from "./readHookPayload.js";
 export async function runHook(): Promise<void> {
   const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
   if (!endpoint) {
-    process.stderr.write(
-      "tare-mcp hook: OTEL_EXPORTER_OTLP_ENDPOINT is not set, skipping.\n"
-    );
+    process.stderr.write("tare-mcp hook: OTEL_EXPORTER_OTLP_ENDPOINT is not set, skipping.\n");
     return;
   }
 
   const headers = parseOtlpHeaders(process.env.OTEL_EXPORTER_OTLP_HEADERS ?? "");
   const serviceName = process.env.OTEL_SERVICE_NAME ?? "claude-code";
-  const rawBudget = process.env.TARE_HOOK_BUDGET
-    ? parseInt(process.env.TARE_HOOK_BUDGET, 10)
-    : undefined;
-  const budget = rawBudget !== undefined && !isNaN(rawBudget) ? rawBudget : undefined;
+  const budget = parseBudget(process.env.TARE_HOOK_BUDGET);
 
   try {
-    const [payload, discovered] = await Promise.all([
+    const [payload, discovered, sessionResult] = await Promise.all([
       readHookPayload(),
-      discoverConfigs()
+      discoverConfigs(),
+      discoverSessionServers()
     ]);
 
-    const parsedConfigs = await Promise.all(
-      discovered.paths.map((p) => parseConfigFile(p))
-    );
-    const servers = parsedConfigs
-      .flatMap((c) => c.servers)
-      .filter((s) => !s.disabled);
+    const parsedConfigs = await Promise.all(discovered.paths.map((p) => parseConfigFile(p)));
+    const servers = parsedConfigs.flatMap((c) => c.servers).filter((s) => !s.disabled);
 
     const inspectedServers: InspectedServer[] = [];
     for (const server of servers) {
       inspectedServers.push(await inspectServerForHook(server));
     }
+    const allInspectedServers = mergeSessionServers(inspectedServers, sessionResult.servers);
 
     const report = await analyzeServers(
-      inspectedServers,
+      allInspectedServers,
       new TokenEstimator({ claudeTokenizerMode: "local" }),
       { configFiles: discovered.paths.length, staticOnly: false }
     );
@@ -60,6 +57,15 @@ export async function runHook(): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`tare-mcp hook: analysis failed: ${message}\n`);
   }
+}
+
+function parseBudget(raw: string | undefined): number | undefined {
+  if (!raw?.trim()) {
+    return undefined;
+  }
+
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 async function inspectServerForHook(server: NormalizedServer): Promise<InspectedServer> {

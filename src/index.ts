@@ -12,7 +12,7 @@ export type {
 } from "./inspectors/types.js";
 
 export { discoverConfigs, getDefaultConfigCandidates } from "./discovery/discoverConfigs.js";
-export { discoverSessionServers } from "./discovery/discoverSessionServers.js";
+export { discoverSessionServers, mergeSessionServers } from "./discovery/discoverSessionServers.js";
 export { parseConfigFile, parseConfigText } from "./discovery/parseConfig.js";
 export { normalizeServer } from "./discovery/normalizeServer.js";
 export { createStaticInspection } from "./inspectors/staticInspector.js";

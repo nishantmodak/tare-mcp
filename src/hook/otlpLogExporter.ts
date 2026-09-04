@@ -33,10 +33,7 @@ export async function exportOtlpLogs(
   });
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    options.timeoutMs ?? 3000
-  );
+  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 3000);
 
   try {
     const response = await fetch(url, {
@@ -46,9 +43,7 @@ export async function exportOtlpLogs(
       signal: controller.signal
     });
     if (!response.ok) {
-      process.stderr.write(
-        `tare-mcp hook: OTLP export failed (HTTP ${response.status})\n`
-      );
+      process.stderr.write(`tare-mcp hook: OTLP export failed (HTTP ${response.status})\n`);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -1,7 +1,7 @@
 import type { TareReport } from "../analysis/types.js";
 
 type OtlpStringValue = { stringValue: string };
-type OtlpIntValue = { intValue: number };
+type OtlpIntValue = { intValue: string };
 type OtlpBoolValue = { boolValue: boolean };
 type OtlpArrayValue = { arrayValue: { values: OtlpAnyValue[] } };
 type OtlpAnyValue = OtlpStringValue | OtlpIntValue | OtlpBoolValue | OtlpArrayValue;
@@ -31,15 +31,15 @@ export function buildLogRecords(
   const budgetExceeded = budget !== undefined && tokensClaude > budget;
 
   const mainAttrs: OtlpAttribute[] = [
-    attr("servers", { intValue: report.summary.servers }),
-    attr("tools", { intValue: report.summary.tools }),
-    attr("tokens_claude", { intValue: tokensClaude }),
-    attr("tokens_openai_cl100k", { intValue: report.summary.estimatedTokens.openaiCl100k }),
-    attr("overlap_clusters", { intValue: report.overlapClusters.length }),
+    attr("servers", intValue(report.summary.servers)),
+    attr("tools", intValue(report.summary.tools)),
+    attr("tokens_claude", intValue(tokensClaude)),
+    attr("tokens_openai_cl100k", intValue(report.summary.estimatedTokens.openaiCl100k)),
+    attr("overlap_clusters", intValue(report.overlapClusters.length)),
     attr("budget_exceeded", { boolValue: budgetExceeded })
   ];
   if (budget !== undefined) {
-    mainAttrs.push(attr("budget_tokens", { intValue: budget }));
+    mainAttrs.push(attr("budget_tokens", intValue(budget)));
   }
   if (sessionId) {
     mainAttrs.push(attr("claude.session_id", { stringValue: sessionId }));
@@ -57,9 +57,9 @@ export function buildLogRecords(
 
   if (budgetExceeded) {
     const warnAttrs: OtlpAttribute[] = [
-      attr("tokens_claude", { intValue: tokensClaude }),
-      attr("budget_tokens", { intValue: budget }),
-      attr("over_by", { intValue: tokensClaude - budget })
+      attr("tokens_claude", intValue(tokensClaude)),
+      attr("budget_tokens", intValue(budget)),
+      attr("over_by", intValue(tokensClaude - budget))
     ];
     if (sessionId) warnAttrs.push(attr("claude.session_id", { stringValue: sessionId }));
     records.push({
@@ -73,7 +73,7 @@ export function buildLogRecords(
 
   if (report.overlapClusters.length > 0) {
     const overlapAttrs: OtlpAttribute[] = [
-      attr("clusters", { intValue: report.overlapClusters.length }),
+      attr("clusters", intValue(report.overlapClusters.length)),
       attr("labels", {
         arrayValue: {
           values: report.overlapClusters.map((c) => ({ stringValue: c.label }))
@@ -95,4 +95,8 @@ export function buildLogRecords(
 
 function attr(key: string, value: OtlpAnyValue): OtlpAttribute {
   return { key, value };
+}
+
+function intValue(value: number): OtlpIntValue {
+  return { intValue: String(Math.trunc(value)) };
 }

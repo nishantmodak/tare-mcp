@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { z } from "zod";
 import { analyzeServers } from "./analysis/analyze.js";
 import { discoverConfigs } from "./discovery/discoverConfigs.js";
-import { discoverSessionServers } from "./discovery/discoverSessionServers.js";
+import { discoverSessionServers, mergeSessionServers } from "./discovery/discoverSessionServers.js";
 import { parseConfigFile } from "./discovery/parseConfig.js";
 import { buildDiffRecommendations, diffReports } from "./diff/diffReports.js";
 import { loadReport, ReportLoadError } from "./diff/loadReport.js";
@@ -146,13 +146,7 @@ async function run(rawOptions: unknown): Promise<number> {
   }
 
   const sessionResult = await discoverSessionServers();
-  const seenNames = new Set(inspectedServers.map((s) => s.name));
-  for (const sessionServer of sessionResult.servers) {
-    if (!seenNames.has(sessionServer.name)) {
-      inspectedServers.push(sessionServer);
-      seenNames.add(sessionServer.name);
-    }
-  }
+  const allInspectedServers = mergeSessionServers(inspectedServers, sessionResult.servers);
 
   const tokenWarnings: string[] = [];
   const envClaudeTokenizer =
@@ -160,7 +154,7 @@ async function run(rawOptions: unknown): Promise<number> {
       ? process.env.TARE_CLAUDE_TOKENIZER
       : undefined;
   const report = await analyzeServers(
-    inspectedServers,
+    allInspectedServers,
     new TokenEstimator({
       claudeTokenizerMode: (envClaudeTokenizer ?? options.claudeTokenizer) as ClaudeTokenizerMode,
       anthropicApiKey: process.env.ANTHROPIC_API_KEY,

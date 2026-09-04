@@ -38,14 +38,12 @@ describe("buildLogRecords", () => {
 
   it("includes correct mcp.tool_surface attributes", () => {
     const records = buildLogRecords(makeReport(), { sessionId: "s1" });
-    const attrs = Object.fromEntries(
-      records[0].attributes.map((a) => [a.key, a.value])
-    );
-    expect(attrs["servers"]).toEqual({ intValue: 2 });
-    expect(attrs["tools"]).toEqual({ intValue: 10 });
-    expect(attrs["tokens_claude"]).toEqual({ intValue: 5000 });
-    expect(attrs["tokens_openai_cl100k"]).toEqual({ intValue: 4800 });
-    expect(attrs["overlap_clusters"]).toEqual({ intValue: 0 });
+    const attrs = Object.fromEntries(records[0].attributes.map((a) => [a.key, a.value]));
+    expect(attrs["servers"]).toEqual({ intValue: "2" });
+    expect(attrs["tools"]).toEqual({ intValue: "10" });
+    expect(attrs["tokens_claude"]).toEqual({ intValue: "5000" });
+    expect(attrs["tokens_openai_cl100k"]).toEqual({ intValue: "4800" });
+    expect(attrs["overlap_clusters"]).toEqual({ intValue: "0" });
     expect(attrs["budget_exceeded"]).toEqual({ boolValue: false });
     expect(attrs["claude.session_id"]).toEqual({ stringValue: "s1" });
   });
@@ -58,10 +56,8 @@ describe("buildLogRecords", () => {
 
   it("includes budget_tokens when budget is set", () => {
     const records = buildLogRecords(makeReport(), { sessionId: "", budget: 40000 });
-    const attrs = Object.fromEntries(
-      records[0].attributes.map((a) => [a.key, a.value])
-    );
-    expect(attrs["budget_tokens"]).toEqual({ intValue: 40000 });
+    const attrs = Object.fromEntries(records[0].attributes.map((a) => [a.key, a.value]));
+    expect(attrs["budget_tokens"]).toEqual({ intValue: "40000" });
     expect(attrs["budget_exceeded"]).toEqual({ boolValue: false });
   });
 
@@ -73,12 +69,10 @@ describe("buildLogRecords", () => {
     expect(records[1].body.stringValue).toBe("mcp.tool_surface.budget_exceeded");
     expect(records[1].severityText).toBe("WARN");
     expect(records[1].severityNumber).toBe(13);
-    const attrs = Object.fromEntries(
-      records[1].attributes.map((a) => [a.key, a.value])
-    );
-    expect(attrs["tokens_claude"]).toEqual({ intValue: 5000 });
-    expect(attrs["budget_tokens"]).toEqual({ intValue: 3000 });
-    expect(attrs["over_by"]).toEqual({ intValue: 2000 });
+    const attrs = Object.fromEntries(records[1].attributes.map((a) => [a.key, a.value]));
+    expect(attrs["tokens_claude"]).toEqual({ intValue: "5000" });
+    expect(attrs["budget_tokens"]).toEqual({ intValue: "3000" });
+    expect(attrs["over_by"]).toEqual({ intValue: "2000" });
     expect(attrs["claude.session_id"]).toEqual({ stringValue: "s2" });
   });
 
@@ -99,10 +93,8 @@ describe("buildLogRecords", () => {
     expect(records).toHaveLength(2);
     expect(records[1].body.stringValue).toBe("mcp.tool_surface.overlap_detected");
     expect(records[1].severityText).toBe("WARN");
-    const attrs = Object.fromEntries(
-      records[1].attributes.map((a) => [a.key, a.value])
-    );
-    expect(attrs["clusters"]).toEqual({ intValue: 1 });
+    const attrs = Object.fromEntries(records[1].attributes.map((a) => [a.key, a.value]));
+    expect(attrs["clusters"]).toEqual({ intValue: "1" });
     expect(attrs["labels"]).toEqual({
       arrayValue: { values: [{ stringValue: "search intent" }] }
     });

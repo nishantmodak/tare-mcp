@@ -5,9 +5,7 @@ import { z } from "zod";
 import type { InspectedServer, McpToolDefinition } from "../inspectors/types.js";
 import { readUtf8 } from "../utils/fs.js";
 
-const SESSION_GLOB_PATTERNS = [
-  "Library/Application Support/Claude/claude-code-sessions/**/*.json"
-];
+const SESSION_GLOB_PATTERNS = ["Library/Application Support/Claude/claude-code-sessions/**/*.json"];
 
 const ToolSchema = z.object({
   name: z.string(),
@@ -28,6 +26,23 @@ const SessionFileSchema = z.object({
 });
 
 type SessionFile = z.infer<typeof SessionFileSchema>;
+
+export function mergeSessionServers(
+  inspectedServers: InspectedServer[],
+  sessionServers: InspectedServer[]
+): InspectedServer[] {
+  const merged = [...inspectedServers];
+  const seenNames = new Set(inspectedServers.map((server) => server.name));
+
+  for (const sessionServer of sessionServers) {
+    if (!seenNames.has(sessionServer.name)) {
+      merged.push(sessionServer);
+      seenNames.add(sessionServer.name);
+    }
+  }
+
+  return merged;
+}
 
 async function readSessionFile(filePath: string): Promise<SessionFile | null> {
   try {

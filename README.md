@@ -714,22 +714,22 @@ export TARE_HOOK_BUDGET=40000
 
 On every session turn-end, `tare-mcp hook` emits up to three structured OTLP log events:
 
-| Event | Severity | When |
-|---|---|---|
-| `mcp.tool_surface` | INFO | Always |
-| `mcp.tool_surface.budget_exceeded` | WARN | When `TARE_HOOK_BUDGET` is set and exceeded |
-| `mcp.tool_surface.overlap_detected` | WARN | When overlap clusters exist |
+| Event                               | Severity | When                                        |
+| ----------------------------------- | -------- | ------------------------------------------- |
+| `mcp.tool_surface`                  | INFO     | Always                                      |
+| `mcp.tool_surface.budget_exceeded`  | WARN     | When `TARE_HOOK_BUDGET` is set and exceeded |
+| `mcp.tool_surface.overlap_detected` | WARN     | When overlap clusters exist                 |
 
 Events include `claude.session_id` for cross-session correlation. The hook always exits 0 — it never blocks Claude Code.
 
 ### Environment variables
 
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | yes | — | Base OTLP URL, e.g. `https://otlp.last9.io` |
-| `OTEL_EXPORTER_OTLP_HEADERS` | no | — | Auth headers: `key=value,key=value` |
-| `OTEL_SERVICE_NAME` | no | `claude-code` | OTel resource service name |
-| `TARE_HOOK_BUDGET` | no | — | Token budget for `budget_exceeded` events |
+| Variable                      | Required | Default       | Purpose                                     |
+| ----------------------------- | -------- | ------------- | ------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | yes      | —             | Base OTLP URL, e.g. `https://otlp.last9.io` |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | no       | —             | Auth headers: `key=value,key=value`         |
+| `OTEL_SERVICE_NAME`           | no       | `claude-code` | OTel resource service name                  |
+| `TARE_HOOK_BUDGET`            | no       | —             | Token budget for `budget_exceeded` events   |
 
 ## Publishing to npm
 
