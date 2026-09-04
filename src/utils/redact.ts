@@ -1,15 +1,5 @@
 const SECRET_KEY_PATTERN = /(authorization|api[_-]?key|token|secret|password|credential|bearer)/i;
 
-export function redactRecord(
-  record: Record<string, string> | undefined
-): Record<string, string> | undefined {
-  if (!record) {
-    return undefined;
-  }
-
-  return Object.fromEntries(Object.keys(record).map((key) => [key, "[REDACTED]"]));
-}
-
 export function collectSecretValues(
   ...records: Array<Record<string, string> | undefined>
 ): string[] {
