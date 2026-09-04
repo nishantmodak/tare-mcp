@@ -400,7 +400,7 @@ Overlap warnings: 3 clusters
    github.create_issue
    linear.create_issue
    jira.create_issue
-   → Create task-specific profiles.
+   → Disable duplicate write paths unless explicitly needed.
 
 Recommendations:
 - Split large MCP servers into task-specific profiles.
@@ -485,7 +485,10 @@ Use `--no-exec` for static-only mode, but note that static-only mode is insuffic
 ./mcp.json
 ./.cursor/mcp.json
 ./.vscode/mcp.json
+~/.claude.json
 ~/.claude/mcp.json
+~/.claude/settings.json
+~/.claude/settings.local.json
 ~/Library/Application Support/Claude/claude_desktop_config.json
 ~/.config/Claude/claude_desktop_config.json
 ~/.config/claude/claude_desktop_config.json
