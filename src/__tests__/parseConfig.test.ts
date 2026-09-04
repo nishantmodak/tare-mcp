@@ -111,4 +111,28 @@ describe("parseConfigText", () => {
     expect(parsed.servers).toEqual([]);
     expect(parsed.warnings[0]).toContain("malformed JSON");
   });
+
+  it("prefers a later enabled server over an earlier disabled duplicate", () => {
+    const parsed = parseConfigText(
+      JSON.stringify({
+        mcpServers: {
+          github: { command: "disabled-github", disabled: true }
+        },
+        mcp: {
+          servers: {
+            github: { command: "enabled-github" }
+          }
+        }
+      }),
+      "/tmp/config.json"
+    );
+
+    expect(parsed.servers).toHaveLength(1);
+    expect(parsed.servers[0]).toMatchObject({
+      name: "github",
+      command: "enabled-github",
+      disabled: false
+    });
+    expect(parsed.warnings.join("\n")).toContain("replaced by a later enabled definition");
+  });
 });

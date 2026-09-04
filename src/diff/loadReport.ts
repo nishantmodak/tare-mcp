@@ -104,7 +104,7 @@ export const TareReportSchema: z.ZodType<TareReport> = z
         inspectionMode: z.enum(["live default", "static-only", "programmatic"]),
         budgetExceeded: z.boolean().optional(),
         budgetTokens: z.number().optional(),
-        budgetTokenizer: z.literal("claude").optional()
+        budgetTokenizer: z.enum(["claude", "openai"]).optional()
       })
       .passthrough()
   })

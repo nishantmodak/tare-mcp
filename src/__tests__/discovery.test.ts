@@ -38,7 +38,7 @@ describe("config discovery", () => {
     }
   });
 
-  it("discovers ~/.claude.json (Claude Code user-level MCPs)", async () => {
+  it("discovers ~/.claude.json for Claude Code user-scope servers", async () => {
     const home = await tempDir();
     try {
       await writeFile(path.join(home.path, ".claude.json"), "{}");
@@ -52,11 +52,31 @@ describe("config discovery", () => {
   it("discovers plugin MCPs via home glob", async () => {
     const home = await tempDir();
     try {
-      const pluginDir = path.join(home.path, ".claude", "plugins", "marketplaces", "my-plugin", ".codex-plugin");
+      const pluginDir = path.join(
+        home.path,
+        ".claude",
+        "plugins",
+        "marketplaces",
+        "my-plugin",
+        ".codex-plugin"
+      );
       await mkdir(pluginDir, { recursive: true });
       await writeFile(path.join(pluginDir, "mcp.json"), "{}");
       const result = await discoverConfigs(home.path, home.path);
       expect(result.paths).toContain(path.join(pluginDir, "mcp.json"));
+    } finally {
+      await home.cleanup();
+    }
+  });
+
+  it("ignores directories at fixed home config paths", async () => {
+    const home = await tempDir();
+    try {
+      const configDirectory = path.join(home.path, ".claude", "mcp.json");
+      await mkdir(configDirectory, { recursive: true });
+
+      const result = await discoverConfigs(home.path, home.path);
+      expect(result.paths).not.toContain(configDirectory);
     } finally {
       await home.cleanup();
     }

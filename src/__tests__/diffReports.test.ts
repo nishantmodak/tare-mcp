@@ -2,7 +2,11 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { TareDiffReport } from "../diff/diffTypes.js";
-import { diffReports, overlapClusterIdentity } from "../diff/diffReports.js";
+import {
+  buildDiffRecommendations,
+  diffReports,
+  overlapClusterIdentity
+} from "../diff/diffReports.js";
 import { loadReport, ReportLoadError } from "../diff/loadReport.js";
 import { evaluateDiffThresholds, hasThresholdFailure } from "../diff/thresholds.js";
 import {
@@ -92,6 +96,29 @@ describe("diff thresholds", () => {
     expect(Object.hasOwn(diff.thresholds[1] ?? {}, "tokenizer")).toBe(false);
     expect(hasThresholdFailure(diff)).toBe(true);
   });
+
+  it("replaces the all-clear status when any threshold fails", () => {
+    const sameReport = baseReport();
+    const diff = diffReports(sameReport, sameReport, {
+      basePath: "base.json",
+      headPath: "head.json"
+    });
+    diff.thresholds = [
+      {
+        flag: "--max-tool-increase",
+        allowed: 0,
+        actual: 1,
+        exceeded: true
+      }
+    ];
+
+    expect(buildDiffRecommendations(diff, "claude")).toEqual([
+      {
+        type: "threshold",
+        message: "Review the failed regression thresholds before merging this MCP config change."
+      }
+    ]);
+  });
 });
 
 describe("diff report loading", () => {
@@ -104,6 +131,27 @@ describe("diff report loading", () => {
       await expect(loadReport(filePath)).resolves.toMatchObject({
         path: filePath,
         report: { summary: { tools: 3 } }
+      });
+    } finally {
+      await dir.cleanup();
+    }
+  });
+
+  it("loads CLI reports budgeted with the OpenAI tokenizer", async () => {
+    const dir = await tempDir();
+    try {
+      const filePath = path.join(dir.path, "openai-budget.json");
+      const report = baseReport();
+      report.metadata = {
+        ...report.metadata,
+        budgetExceeded: true,
+        budgetTokens: 100,
+        budgetTokenizer: "openai"
+      };
+      await writeFile(filePath, JSON.stringify(report), "utf8");
+
+      await expect(loadReport(filePath)).resolves.toMatchObject({
+        report: { metadata: { budgetTokenizer: "openai" } }
       });
     } finally {
       await dir.cleanup();
@@ -141,6 +189,64 @@ describe("diff reporters", () => {
     expect(output).toContain("- slack.search_messages: ~560 OpenAI cl100k tokens");
     expect(output).toContain("- github.search_code: ~+90 OpenAI cl100k tokens");
     expect(output).not.toContain("~1,100 Claude tokens");
+  });
+
+  it("orders changed servers and tools by the selected tokenizer", () => {
+    const diff = buildDiff();
+    const server = diff.servers.changed[0];
+    const tool = diff.tools.changed[0];
+    if (!server || !tool) {
+      throw new Error("Expected changed server and tool fixtures.");
+    }
+
+    diff.servers.changed = [
+      {
+        ...server,
+        name: "claude-heavy",
+        estimatedTokens: {
+          base: { claude: 0, openaiCl100k: 0 },
+          head: { claude: 100, openaiCl100k: 10 },
+          delta: { claude: 100, openaiCl100k: 10 }
+        }
+      },
+      {
+        ...server,
+        name: "openai-heavy",
+        estimatedTokens: {
+          base: { claude: 0, openaiCl100k: 0 },
+          head: { claude: 1, openaiCl100k: 200 },
+          delta: { claude: 1, openaiCl100k: 200 }
+        }
+      }
+    ];
+    diff.tools.changed = [
+      {
+        ...tool,
+        server: "github",
+        name: "claude_heavy",
+        estimatedTokens: {
+          base: { claude: 0, openaiCl100k: 0 },
+          head: { claude: 100, openaiCl100k: 10 },
+          delta: { claude: 100, openaiCl100k: 10 }
+        }
+      },
+      {
+        ...tool,
+        server: "github",
+        name: "openai_heavy",
+        estimatedTokens: {
+          base: { claude: 0, openaiCl100k: 0 },
+          head: { claude: 1, openaiCl100k: 200 },
+          delta: { claude: 1, openaiCl100k: 200 }
+        }
+      }
+    ];
+
+    const output = renderDiffHumanReport(diff, { tokenizer: "openai" });
+    expect(output.indexOf("- openai-heavy:")).toBeLessThan(output.indexOf("- claude-heavy:"));
+    expect(output.indexOf("- github.openai_heavy:")).toBeLessThan(
+      output.indexOf("- github.claude_heavy:")
+    );
   });
 
   it("renders token thresholds as approximate estimates only for token flags", () => {

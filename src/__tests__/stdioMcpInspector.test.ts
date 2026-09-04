@@ -107,4 +107,21 @@ describe("inspectStdioServer", () => {
       }
     }
   });
+
+  it("does not forward host secrets that were not explicitly configured", () => {
+    const previousGithubToken = process.env.GITHUB_TOKEN;
+    process.env.GITHUB_TOKEN = "host-only-secret";
+
+    try {
+      const env = buildServerEnv(stdioServer({ env: { SERVER_TOKEN: "server-secret" } }));
+      expect(env.GITHUB_TOKEN).toBeUndefined();
+      expect(env.SERVER_TOKEN).toBe("server-secret");
+    } finally {
+      if (previousGithubToken === undefined) {
+        delete process.env.GITHUB_TOKEN;
+      } else {
+        process.env.GITHUB_TOKEN = previousGithubToken;
+      }
+    }
+  });
 });

@@ -33,6 +33,20 @@ describe("OverlapDetector", () => {
     ]);
 
     expect(clusters[0]?.label).toBe("issue creation");
+    expect(clusters[0]?.recommendation).toBe(
+      "Disable duplicate write paths unless explicitly needed."
+    );
+  });
+
+  it("detects textual-only overlap when the corpus contains exactly two tools", () => {
+    const clusters = new OverlapDetector().detect([
+      tool("acme", "user_profile", "Read the user profile for the authenticated user."),
+      tool("acme2", "user_profile", "Read the user profile for the authenticated user.")
+    ]);
+
+    expect(clusters).toHaveLength(1);
+    expect(clusters[0]?.tools.map((entry) => entry.server).sort()).toEqual(["acme", "acme2"]);
+    expect(clusters[0]?.signals).toContain("tfidf");
   });
 
   it("clusters search_code and grep as search intent", () => {

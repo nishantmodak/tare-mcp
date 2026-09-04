@@ -4,7 +4,7 @@ import { analyzeServers } from "./analysis/analyze.js";
 import { discoverConfigs } from "./discovery/discoverConfigs.js";
 import { discoverSessionServers } from "./discovery/discoverSessionServers.js";
 import { parseConfigFile } from "./discovery/parseConfig.js";
-import { diffReports } from "./diff/diffReports.js";
+import { buildDiffRecommendations, diffReports } from "./diff/diffReports.js";
 import { loadReport, ReportLoadError } from "./diff/loadReport.js";
 import { evaluateDiffThresholds, hasThresholdFailure } from "./diff/thresholds.js";
 import type { DiffTokenizer } from "./diff/diffTypes.js";
@@ -179,28 +179,25 @@ async function run(rawOptions: unknown): Promise<number> {
   // Append them after analysis so JSON/human reports include opt-in API fallback notices.
   report.warnings.push(...tokenWarnings);
 
+  const budgetTokenizer = options.tokenizer as BudgetTokenizer;
+  const budgetExceeded =
+    options.budget !== undefined && budgetActual(report, budgetTokenizer) > options.budget;
+  if (options.budget !== undefined) {
+    report.metadata.budgetTokens = options.budget;
+    report.metadata.budgetTokenizer = budgetTokenizer;
+    report.metadata.budgetExceeded = budgetExceeded;
+  }
+
   if (options.json) {
     process.stdout.write(renderJsonReport(report));
   } else {
     process.stdout.write(renderHumanReport(report));
-    if (
-      options.budget &&
-      budgetActual(report, options.tokenizer as BudgetTokenizer) > options.budget
-    ) {
-      process.stdout.write(
-        renderBudgetFailure(report, options.budget, options.tokenizer as BudgetTokenizer)
-      );
+    if (options.budget !== undefined && budgetExceeded) {
+      process.stdout.write(renderBudgetFailure(report, options.budget, budgetTokenizer));
     }
   }
 
-  if (
-    options.budget &&
-    budgetActual(report, options.tokenizer as BudgetTokenizer) > options.budget
-  ) {
-    return 1;
-  }
-
-  return 0;
+  return budgetExceeded ? 1 : 0;
 }
 
 async function runDiff(
@@ -215,9 +212,11 @@ async function runDiff(
       loadReport(expandHome(paths.basePath)),
       loadReport(expandHome(paths.headPath))
     ]);
+    const tokenizer = options.tokenizer as DiffTokenizer;
     const report = diffReports(base.report, head.report, {
       basePath: base.path,
-      headPath: head.path
+      headPath: head.path,
+      tokenizer
     });
 
     report.thresholds = evaluateDiffThresholds(report, {
@@ -225,8 +224,9 @@ async function runDiff(
       maxToolIncrease: options.maxToolIncrease,
       maxServerIncrease: options.maxServerIncrease,
       maxOverlapIncrease: options.maxOverlapIncrease,
-      tokenizer: options.tokenizer as DiffTokenizer
+      tokenizer
     });
+    report.recommendations = buildDiffRecommendations(report, tokenizer);
 
     if (options.json) {
       process.stdout.write(renderDiffJsonReport(report));

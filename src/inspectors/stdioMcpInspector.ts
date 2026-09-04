@@ -11,21 +11,8 @@ import type {
   NormalizedServer
 } from "./types.js";
 
-const EXCLUDED_TARE_ENV = new Set([
-  "ANTHROPIC_API_KEY",
-  "TARE_CLAUDE_TOKENIZER",
-  "TARE_ANTHROPIC_MODEL",
-  "TARE_DISABLE_ANTHROPIC_TOKEN_API"
-]);
-
 export function buildServerEnv(server: NormalizedServer): Record<string, string> {
-  const base = Object.fromEntries(
-    Object.entries(process.env)
-      .filter(([key]) => !EXCLUDED_TARE_ENV.has(key))
-      .filter((entry): entry is [string, string] => entry[1] !== undefined)
-  );
-
-  return { ...base, ...(server.env ?? {}) };
+  return { ...(server.env ?? {}) };
 }
 
 type SdkTool = {
