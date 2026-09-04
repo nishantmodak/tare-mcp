@@ -1,11 +1,13 @@
 import os from "node:os";
 import path from "node:path";
+import { stat } from "node:fs/promises";
 import fg from "fast-glob";
-import { expandHome, pathExists } from "../utils/fs.js";
+import { expandHome } from "../utils/fs.js";
 
 const LOCAL_CONFIG_PATTERNS = [".mcp.json", "mcp.json", ".cursor/mcp.json", ".vscode/mcp.json"];
 
 const HOME_CONFIG_PATTERNS = [
+  "~/.claude.json",
   "~/.claude/mcp.json",
   "~/.claude/settings.json",
   "~/.claude/settings.local.json",
@@ -44,11 +46,19 @@ export async function discoverConfigs(
   const homeMatches: string[] = [];
 
   for (const candidate of homeCandidates) {
-    if (await pathExists(candidate)) {
+    if (await isFile(candidate)) {
       homeMatches.push(candidate);
     }
   }
 
   const paths = [...new Set([...localMatches, ...homeMatches])].sort();
   return { paths, warnings };
+}
+
+async function isFile(candidate: string): Promise<boolean> {
+  try {
+    return (await stat(candidate)).isFile();
+  } catch {
+    return false;
+  }
 }
