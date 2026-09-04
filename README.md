@@ -738,9 +738,12 @@ Maintainers should use the [release checklist](https://github.com/nishantmodak/t
 
 To publish from GitHub Actions:
 
-1. Create an npm automation token.
-2. Add it to the repository as `NPM_TOKEN`.
-3. Publish a GitHub release or run the workflow manually.
+1. In the `tare-mcp` package settings on npm, add a GitHub Actions trusted publisher.
+2. Set the repository to `nishantmodak/tare-mcp`, the workflow filename to `publish-npm.yml`, and allow direct publishing.
+3. Leave the environment name empty, matching the workflow.
+4. Publish a GitHub release or run the workflow manually.
+
+The workflow authenticates through short-lived OIDC credentials. It does not use an npm access token or GitHub Actions secret.
 
 The workflow runs:
 
@@ -750,7 +753,7 @@ pnpm test
 pnpm run lint
 pnpm build
 npm pack --dry-run
-npm publish --access public --provenance
+npm publish --access public
 ```
 
 The npm package is named `tare-mcp` because the unscoped `tare` package name is already occupied on npm.
