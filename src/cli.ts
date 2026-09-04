@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { z } from "zod";
 import { analyzeServers } from "./analysis/analyze.js";
 import { discoverConfigs } from "./discovery/discoverConfigs.js";
+import { discoverSessionServers, mergeSessionServers } from "./discovery/discoverSessionServers.js";
 import { parseConfigFile } from "./discovery/parseConfig.js";
 import { buildDiffRecommendations, diffReports } from "./diff/diffReports.js";
 import { loadReport, ReportLoadError } from "./diff/loadReport.js";
@@ -27,6 +28,7 @@ import { TokenEstimator } from "./tokens/countTokens.js";
 import type { ClaudeTokenizerMode } from "./tokens/types.js";
 import { expandHome } from "./utils/fs.js";
 import { VERSION } from "./version.js";
+import { runHook } from "./hook/hookCommand.js";
 
 const CliOptionsSchema = z.object({
   noExec: z.boolean().default(false),
@@ -143,13 +145,16 @@ async function run(rawOptions: unknown): Promise<number> {
     inspectedServers.push(await inspectServer(server, options));
   }
 
+  const sessionResult = await discoverSessionServers();
+  const allInspectedServers = mergeSessionServers(inspectedServers, sessionResult.servers);
+
   const tokenWarnings: string[] = [];
   const envClaudeTokenizer =
     process.env.TARE_CLAUDE_TOKENIZER === "api" || process.env.TARE_CLAUDE_TOKENIZER === "local"
       ? process.env.TARE_CLAUDE_TOKENIZER
       : undefined;
   const report = await analyzeServers(
-    inspectedServers,
+    allInspectedServers,
     new TokenEstimator({
       claudeTokenizerMode: (envClaudeTokenizer ?? options.claudeTokenizer) as ClaudeTokenizerMode,
       anthropicApiKey: process.env.ANTHROPIC_API_KEY,
@@ -340,6 +345,26 @@ export function createProgram(): Command {
         mergeDiffRawOptions(options, program.opts())
       );
       process.exitCode = exitCode;
+    });
+
+  program
+    .command("hook")
+    .description(
+      [
+        "Emit MCP tool surface telemetry to an OTLP endpoint.",
+        "",
+        "Register as a Claude Code Stop hook in ~/.claude/settings.json.",
+        "Requires OTEL_EXPORTER_OTLP_ENDPOINT to be set.",
+        "",
+        "Env vars:",
+        "  OTEL_EXPORTER_OTLP_ENDPOINT  Base OTLP URL (required)",
+        "  OTEL_EXPORTER_OTLP_HEADERS   Auth headers: key=value,key=value",
+        "  OTEL_SERVICE_NAME            Resource service name (default: claude-code)",
+        "  TARE_HOOK_BUDGET             Token budget for budget_exceeded check"
+      ].join("\n")
+    )
+    .action(async () => {
+      await runHook();
     });
 
   return program;

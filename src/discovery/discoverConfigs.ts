@@ -17,6 +17,12 @@ const HOME_CONFIG_PATTERNS = [
   "~/.config/tare/mcp.json"
 ];
 
+// Glob patterns relative to home for directories that expand dynamically.
+const HOME_GLOB_PATTERNS = [
+  ".claude/plugins/marketplaces/*/.codex-plugin/mcp.json",
+  ".cursor/extensions/*/mcp.json"
+];
+
 export function getDefaultConfigCandidates(cwd = process.cwd(), home = os.homedir()): string[] {
   return [
     ...LOCAL_CONFIG_PATTERNS.map((candidate) => path.resolve(cwd, candidate)),
@@ -51,7 +57,15 @@ export async function discoverConfigs(
     }
   }
 
-  const paths = [...new Set([...localMatches, ...homeMatches])].sort();
+  const homeGlobMatches = await fg(HOME_GLOB_PATTERNS, {
+    cwd: home,
+    absolute: true,
+    onlyFiles: true,
+    dot: true,
+    unique: true
+  });
+
+  const paths = [...new Set([...localMatches, ...homeMatches, ...homeGlobMatches])].sort();
   return { paths, warnings };
 }
 

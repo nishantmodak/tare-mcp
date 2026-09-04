@@ -49,6 +49,7 @@ Choose the mode that matches where your MCP tools exist:
 | Local MCP config audit                    | `npx tare-mcp`                         |
 | PR regression checks                      | `tare-mcp --json` plus `tare-mcp diff` |
 | Hosted MCP endpoint smoke test            | `npx tare-mcp --timeout 10000`         |
+| Claude Code session telemetry             | `tare-mcp hook` (Claude Code hook)     |
 
 Think of it as `du -sh node_modules`, but for agent tool context.
 
@@ -69,6 +70,7 @@ Think of it as `du -sh node_modules`, but for agent tool context.
 - [JSON Usage](#json-usage)
 - [PR Regression Checks](#pr-regression-checks)
 - [CI Usage](#ci-usage)
+- [Claude Code Hook](#claude-code-hook)
 - [Publishing to npm](#publishing-to-npm)
 - [CLI](#cli)
 - [Roadmap](#roadmap)
@@ -679,6 +681,56 @@ For CI systems that should not execute local MCP server commands, use static-onl
 npx tare-mcp --no-exec --json
 ```
 
+## Claude Code Hook
+
+Register `tare-mcp hook` as a Claude Code `Stop` hook to automatically emit MCP tool surface telemetry after every session turn.
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tare-mcp hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Set environment variables (e.g. in `~/.zshrc`):
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp.last9.io"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <token>"
+export TARE_HOOK_BUDGET=40000
+```
+
+On every session turn-end, `tare-mcp hook` emits up to three structured OTLP log events:
+
+| Event                               | Severity | When                                        |
+| ----------------------------------- | -------- | ------------------------------------------- |
+| `mcp.tool_surface`                  | INFO     | Always                                      |
+| `mcp.tool_surface.budget_exceeded`  | WARN     | When `TARE_HOOK_BUDGET` is set and exceeded |
+| `mcp.tool_surface.overlap_detected` | WARN     | When overlap clusters exist                 |
+
+Events include `claude.session_id` for cross-session correlation. The hook always exits 0 — it never blocks Claude Code.
+
+### Environment variables
+
+| Variable                      | Required | Default       | Purpose                                     |
+| ----------------------------- | -------- | ------------- | ------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | yes      | —             | Base OTLP URL, e.g. `https://otlp.last9.io` |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | no       | —             | Auth headers: `key=value,key=value`         |
+| `OTEL_SERVICE_NAME`           | no       | `claude-code` | OTel resource service name                  |
+| `TARE_HOOK_BUDGET`            | no       | —             | Token budget for `budget_exceeded` events   |
+
 ## Publishing to npm
 
 This repository includes [`.github/workflows/publish-npm.yml`](.github/workflows/publish-npm.yml).
@@ -758,12 +810,27 @@ Options:
   --tokenizer <name>                 Tokenizer for --max-token-increase: claude or openai. Default: claude.
 ```
 
+```txt
+Usage: tare-mcp hook [options]
+
+Emit MCP tool surface telemetry to an OTLP endpoint.
+Register as a Claude Code Stop hook in ~/.claude/settings.json.
+Requires OTEL_EXPORTER_OTLP_ENDPOINT to be set.
+
+Env vars:
+  OTEL_EXPORTER_OTLP_ENDPOINT  Base OTLP URL (required)
+  OTEL_EXPORTER_OTLP_HEADERS   Auth headers: key=value,key=value
+  OTEL_SERVICE_NAME            Resource service name (default: claude-code)
+  TARE_HOOK_BUDGET             Token budget for budget_exceeded check
+```
+
 ## Roadmap
 
 v0.3:
 
 - [x] Programmatic API for running agents through `measureTools()`
 - [x] Programmatic JSON reports compatible with `tare-mcp diff`
+- [x] Claude Code hook (`tare-mcp hook`) for OTLP telemetry on session end
 
 v0.2:
 
