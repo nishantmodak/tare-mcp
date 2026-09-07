@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import type { TareReport } from "../analysis/types.js";
 import type { TareDiffReport } from "../diff/diffTypes.js";
 import {
   buildDiffRecommendations,
@@ -284,5 +285,225 @@ describe("diff reporters", () => {
     const parsed = JSON.parse(renderDiffJsonReport(buildDiff())) as TareDiffReport;
 
     expect(parsed.version).toBe(VERSION);
+  });
+});
+
+describe("diff tokenizer ordering", () => {
+  function emptyReport(): TareReport {
+    return {
+      version: "0.2.0",
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      summary: {
+        configFiles: 1,
+        servers: 0,
+        tools: 0,
+        estimatedTokens: { claude: 0, openaiCl100k: 0 },
+        contextWindows: {
+          "64000": { claude: 0, openaiCl100k: 0 },
+          "128000": { claude: 0, openaiCl100k: 0 },
+          "200000": { claude: 0, openaiCl100k: 0 }
+        },
+        insufficientServers: 0
+      },
+      servers: [],
+      overlapClusters: [],
+      recommendations: [],
+      warnings: [],
+      metadata: { staticOnly: false, inspectionMode: "live default" }
+    };
+  }
+
+  function server(name: string, claude: number, openai: number) {
+    return {
+      name,
+      sourceConfigPath: "/m.json",
+      transport: "stdio" as const,
+      command: "x",
+      toolCount: 1,
+      estimatedTokens: { claude, openaiCl100k: openai },
+      inspectionMode: "live" as const,
+      confidence: "high" as const,
+      warnings: [],
+      tools: [
+        {
+          name: "t",
+          description: "d",
+          estimatedTokens: { claude, openaiCl100k: openai },
+          hasInputSchema: true
+        }
+      ]
+    };
+  }
+
+  it("orders added servers by the selected tokenizer", () => {
+    const head: TareReport = {
+      ...emptyReport(),
+      summary: {
+        ...emptyReport().summary,
+        servers: 2,
+        tools: 2,
+        estimatedTokens: { claude: 2100, openaiCl100k: 2100 }
+      },
+      servers: [server("claudeHeavy", 2000, 100), server("openaiHeavy", 100, 2000)]
+    };
+
+    const byClaude = diffReports(emptyReport(), head, {
+      basePath: "b.json",
+      headPath: "h.json",
+      tokenizer: "claude"
+    });
+    expect(byClaude.servers.added.map((s) => s.name)).toEqual(["claudeHeavy", "openaiHeavy"]);
+
+    const byOpenai = diffReports(emptyReport(), head, {
+      basePath: "b.json",
+      headPath: "h.json",
+      tokenizer: "openai"
+    });
+    expect(byOpenai.servers.added.map((s) => s.name)).toEqual(["openaiHeavy", "claudeHeavy"]);
+  });
+
+  it("orders added tools by the selected tokenizer", () => {
+    const head: TareReport = {
+      ...emptyReport(),
+      summary: {
+        ...emptyReport().summary,
+        servers: 2,
+        tools: 2,
+        estimatedTokens: { claude: 2100, openaiCl100k: 2100 }
+      },
+      servers: [server("claudeHeavy", 2000, 100), server("openaiHeavy", 100, 2000)]
+    };
+
+    const byOpenai = diffReports(emptyReport(), head, {
+      basePath: "b.json",
+      headPath: "h.json",
+      tokenizer: "openai"
+    });
+    expect(byOpenai.tools.added.map((t) => `${t.server}.${t.name}`)).toEqual([
+      "openaiHeavy.t",
+      "claudeHeavy.t"
+    ]);
+  });
+
+  it("orders changed servers by abs(selected tokenizer delta)", () => {
+    const base: TareReport = {
+      ...emptyReport(),
+      servers: [server("serverA", 0, 0), server("serverB", 0, 0)]
+    };
+    const head: TareReport = {
+      ...emptyReport(),
+      summary: {
+        ...emptyReport().summary,
+        servers: 2,
+        tools: 2,
+        estimatedTokens: { claude: 210, openaiCl100k: 210 }
+      },
+      servers: [server("serverA", 200, 10), server("serverB", 10, 200)]
+    };
+
+    const byClaude = diffReports(base, head, {
+      basePath: "b.json",
+      headPath: "h.json",
+      tokenizer: "claude"
+    });
+    expect(byClaude.servers.changed.map((s) => s.name)).toEqual(["serverA", "serverB"]);
+
+    const byOpenai = diffReports(base, head, {
+      basePath: "b.json",
+      headPath: "h.json",
+      tokenizer: "openai"
+    });
+    expect(byOpenai.servers.changed.map((s) => s.name)).toEqual(["serverB", "serverA"]);
+  });
+
+  it("orders changed tools by abs(selected tokenizer delta)", () => {
+    const base: TareReport = {
+      ...emptyReport(),
+      servers: [server("serverA", 0, 0), server("serverB", 0, 0)]
+    };
+    const head: TareReport = {
+      ...emptyReport(),
+      summary: {
+        ...emptyReport().summary,
+        servers: 2,
+        tools: 2,
+        estimatedTokens: { claude: 210, openaiCl100k: 210 }
+      },
+      servers: [server("serverA", 200, 10), server("serverB", 10, 200)]
+    };
+
+    const byOpenai = diffReports(base, head, {
+      basePath: "b.json",
+      headPath: "h.json",
+      tokenizer: "openai"
+    });
+    expect(byOpenai.tools.changed.map((t) => `${t.server}.${t.name}`)).toEqual([
+      "serverB.t",
+      "serverA.t"
+    ]);
+  });
+
+  it("defaults to claude ordering when no tokenizer is supplied", () => {
+    const head: TareReport = {
+      ...emptyReport(),
+      summary: {
+        ...emptyReport().summary,
+        servers: 2,
+        tools: 2,
+        estimatedTokens: { claude: 2100, openaiCl100k: 2100 }
+      },
+      servers: [server("claudeHeavy", 2000, 100), server("openaiHeavy", 100, 2000)]
+    };
+
+    const d = diffReports(emptyReport(), head, {
+      basePath: "b.json",
+      headPath: "h.json"
+    });
+    expect(d.servers.added.map((s) => s.name)).toEqual(["claudeHeavy", "openaiHeavy"]);
+  });
+
+  it("serializes tokenizer-ordered arrays in the JSON report", () => {
+    const base: TareReport = {
+      ...emptyReport(),
+      servers: [server("serverA", 0, 0), server("serverB", 0, 0)]
+    };
+    const head: TareReport = {
+      ...emptyReport(),
+      summary: {
+        ...emptyReport().summary,
+        servers: 2,
+        tools: 2,
+        estimatedTokens: { claude: 210, openaiCl100k: 210 }
+      },
+      servers: [server("serverA", 200, 10), server("serverB", 10, 200)]
+    };
+    const headAdded: TareReport = {
+      ...emptyReport(),
+      summary: {
+        ...emptyReport().summary,
+        servers: 2,
+        tools: 2,
+        estimatedTokens: { claude: 2100, openaiCl100k: 2100 }
+      },
+      servers: [server("claudeHeavy", 2000, 100), server("openaiHeavy", 100, 2000)]
+    };
+
+    const added = diffReports(emptyReport(), headAdded, {
+      basePath: "b.json",
+      headPath: "h.json",
+      tokenizer: "openai"
+    });
+    expect(
+      JSON.parse(renderDiffJsonReport(added)).servers.added.map((s: { name: string }) => s.name)
+    ).toEqual(["openaiHeavy", "claudeHeavy"]);
+
+    const changed = diffReports(base, head, {
+      basePath: "b.json",
+      headPath: "h.json",
+      tokenizer: "openai"
+    });
+    expect(
+      JSON.parse(renderDiffJsonReport(changed)).servers.changed.map((s: { name: string }) => s.name)
+    ).toEqual(["serverB", "serverA"]);
   });
 });
