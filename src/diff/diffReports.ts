@@ -30,6 +30,7 @@ export function diffReports(
   headReport: TareReport,
   options: DiffReportsOptions
 ): TareDiffReport {
+  const tokenizer = options.tokenizer ?? "claude";
   const baseServers = new Map(baseReport.servers.map((server) => [server.name, server]));
   const headServers = new Map(headReport.servers.map((server) => [server.name, server]));
   const baseTools = buildToolMap(baseReport);
@@ -62,15 +63,15 @@ export function diffReports(
         headReport.overlapClusters.length
       )
     },
-    servers: diffServers(baseServers, headServers),
-    tools: diffTools(baseTools, headTools),
+    servers: diffServers(baseServers, headServers, tokenizer),
+    tools: diffTools(baseTools, headTools, tokenizer),
     overlapClusters: diffOverlapClusters(baseClusters, headClusters),
     thresholds: [],
     recommendations: [],
     warnings: buildWarnings(baseReport, headReport)
   };
 
-  report.recommendations = buildDiffRecommendations(report, options.tokenizer ?? "claude");
+  report.recommendations = buildDiffRecommendations(report, tokenizer);
   return report;
 }
 
@@ -80,7 +81,8 @@ export function overlapClusterIdentity(cluster: ReportOverlapCluster): string {
 
 function diffServers(
   baseServers: Map<string, ReportServer>,
-  headServers: Map<string, ReportServer>
+  headServers: Map<string, ReportServer>,
+  tokenizer: DiffTokenizer
 ): TareDiffReport["servers"] {
   const added: DiffServer[] = [];
   const removed: DiffServer[] = [];
@@ -107,15 +109,16 @@ function diffServers(
   }
 
   return {
-    added: added.sort(compareServersByTokens),
-    removed: removed.sort(compareServersByTokens),
-    changed: changed.sort(compareServerChanges)
+    added: added.sort((a, b) => compareServersByTokens(a, b, tokenizer)),
+    removed: removed.sort((a, b) => compareServersByTokens(a, b, tokenizer)),
+    changed: changed.sort((a, b) => compareServerChanges(a, b, tokenizer))
   };
 }
 
 function diffTools(
   baseTools: Map<string, DiffTool>,
-  headTools: Map<string, DiffTool>
+  headTools: Map<string, DiffTool>,
+  tokenizer: DiffTokenizer
 ): TareDiffReport["tools"] {
   const added: DiffTool[] = [];
   const removed: DiffTool[] = [];
@@ -142,9 +145,9 @@ function diffTools(
   }
 
   return {
-    added: added.sort(compareToolsByTokens),
-    removed: removed.sort(compareToolsByTokens),
-    changed: changed.sort(compareToolChanges)
+    added: added.sort((a, b) => compareToolsByTokens(a, b, tokenizer)),
+    removed: removed.sort((a, b) => compareToolsByTokens(a, b, tokenizer)),
+    changed: changed.sort((a, b) => compareToolChanges(a, b, tokenizer))
   };
 }
 
@@ -378,31 +381,47 @@ function toolKey(server: string, tool: string): string {
   return `${server}\0${tool}`;
 }
 
+function tokenValue(tokens: DiffTokenTotals, tokenizer: DiffTokenizer): number {
+  return tokenizer === "openai" ? tokens.openaiCl100k : tokens.claude;
+}
+
 function positiveIncrease(value: number): number {
   return Math.max(0, value);
 }
 
-function compareServersByTokens(a: DiffServer, b: DiffServer): number {
-  return b.estimatedTokens.claude - a.estimatedTokens.claude || a.name.localeCompare(b.name);
-}
-
-function compareServerChanges(a: DiffServerChange, b: DiffServerChange): number {
+function compareServersByTokens(a: DiffServer, b: DiffServer, tokenizer: DiffTokenizer): number {
   return (
-    Math.abs(b.estimatedTokens.delta.claude) - Math.abs(a.estimatedTokens.delta.claude) ||
+    tokenValue(b.estimatedTokens, tokenizer) - tokenValue(a.estimatedTokens, tokenizer) ||
     a.name.localeCompare(b.name)
   );
 }
 
-function compareToolsByTokens(a: DiffTool, b: DiffTool): number {
+function compareServerChanges(
+  a: DiffServerChange,
+  b: DiffServerChange,
+  tokenizer: DiffTokenizer
+): number {
   return (
-    b.estimatedTokens.claude - a.estimatedTokens.claude ||
+    Math.abs(tokenValue(b.estimatedTokens.delta, tokenizer)) -
+      Math.abs(tokenValue(a.estimatedTokens.delta, tokenizer)) || a.name.localeCompare(b.name)
+  );
+}
+
+function compareToolsByTokens(a: DiffTool, b: DiffTool, tokenizer: DiffTokenizer): number {
+  return (
+    tokenValue(b.estimatedTokens, tokenizer) - tokenValue(a.estimatedTokens, tokenizer) ||
     `${a.server}.${a.name}`.localeCompare(`${b.server}.${b.name}`)
   );
 }
 
-function compareToolChanges(a: DiffToolChange, b: DiffToolChange): number {
+function compareToolChanges(
+  a: DiffToolChange,
+  b: DiffToolChange,
+  tokenizer: DiffTokenizer
+): number {
   return (
-    Math.abs(b.estimatedTokens.delta.claude) - Math.abs(a.estimatedTokens.delta.claude) ||
+    Math.abs(tokenValue(b.estimatedTokens.delta, tokenizer)) -
+      Math.abs(tokenValue(a.estimatedTokens.delta, tokenizer)) ||
     `${a.server}.${a.name}`.localeCompare(`${b.server}.${b.name}`)
   );
 }
